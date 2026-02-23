@@ -67,7 +67,6 @@ function buildAutoFolders(
         isSystem: true,
         systemKey: rootKey,
         sortIndex: 0,
-        icon: '🗂',
       })
     }
     systemFolders.push(typeRoot)
@@ -106,7 +105,6 @@ function buildAutoFolders(
         isSystem: true,
         systemKey: rootKey,
         sortIndex: 1,
-        icon: '🏃',
       })
     }
     systemFolders.push(sprintRoot)

@@ -24,7 +24,7 @@ import {
 } from '@/store/slices/foldersSlice'
 import { setNoteFolder, bulkSetNoteFolders, clearNoteFolders } from '@/store/slices/notesSlice'
 import { setActiveNoteId } from '@/store/slices/uiSlice'
-import type { Folder, Note } from '@/types'
+import type { Folder, Note, NoteType } from '@/types'
 import { NOTE_TYPE_META } from '@/types'
 import { NoteTypeIcon } from '@/lib/noteIcons'
 
@@ -564,14 +564,34 @@ function FolderNode({
           {open ? <IcoChevronDown /> : <IcoChevronRight />}
         </span>
 
-        {/* Folder icon */}
-        {folder.icon ? (
-          <span style={{ fontSize: '12px', lineHeight: 1, flexShrink: 0 }}>{folder.icon}</span>
-        ) : (
-          <span style={{ color: folder.color ?? 'var(--text-3)', display: 'flex', flexShrink: 0 }}>
-            <IcoFolder open={open} color={folder.color} />
-          </span>
-        )}
+        {/* Folder icon — system folders use NoteTypeIcon, others use IcoFolder */}
+        {(() => {
+          const sk = folder.systemKey
+          if (sk?.startsWith('auto:type:')) {
+            const type = sk.replace('auto:type:', '') as NoteType
+            return (
+              <span
+                style={{ display: 'flex', flexShrink: 0, color: folder.color ?? 'var(--text-3)' }}
+              >
+                <NoteTypeIcon type={type} size={13} />
+              </span>
+            )
+          }
+          if (sk === 'auto:sprint-root' || sk?.startsWith('auto:sprint:')) {
+            return (
+              <span style={{ display: 'flex', flexShrink: 0, color: folder.color ?? '#f472b6' }}>
+                <NoteTypeIcon type="sprint" size={13} />
+              </span>
+            )
+          }
+          return (
+            <span
+              style={{ color: folder.color ?? 'var(--text-3)', display: 'flex', flexShrink: 0 }}
+            >
+              <IcoFolder open={open} color={folder.color} />
+            </span>
+          )
+        })()}
 
         {/* Name */}
         <span
@@ -929,7 +949,16 @@ export default function FolderTree({ onNoteSelect: _onNoteSelect }: Props) {
               lineHeight: 1.6,
             }}
           >
-            <div style={{ marginBottom: '8px', opacity: 0.5, fontSize: '20px' }}>🗂</div>
+            <div
+              style={{
+                marginBottom: '8px',
+                opacity: 0.4,
+                display: 'flex',
+                justifyContent: 'center',
+              }}
+            >
+              <IcoFolder open={false} />
+            </div>
             Sin carpetas.
             <br />
             Usa <b>+</b> para crear una
