@@ -2,8 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '@/store'
 import { setActiveNoteId, setEditorPreviewMode } from '@/store/slices/uiSlice'
-import { updateNote, addNote, deleteNote, addAttachment } from '@/store/slices/notesSlice'
-import type { NoteAttachment } from '@/types'
+import {
+  updateNote,
+  addNote,
+  deleteNote,
+  addAttachment,
+  setNoteFolder,
+} from '@/store/slices/notesSlice'
+import type { NoteAttachment, NoteType } from '@/types'
+import { NOTE_TYPE_META } from '@/types'
+import { NoteTypeIcon } from '@/lib/noteIcons'
 import { nanoid } from 'nanoid'
 import MarkdownEditor, {
   type MarkdownEditorHandle,
@@ -184,12 +192,15 @@ export default function EditorPage() {
   const mode = useAppSelector(s => s.ui.editorPreviewMode)
   const note = useAppSelector(s => s.notes.notes.find(n => n.id === (noteId ?? activeNoteId)))
   const allNotes = useAppSelector(s => s.notes.notes)
+  const sprints = useAppSelector(s => s.daily.sprints)
+  const folders = useAppSelector(s => s.folders.folders)
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editorRef = useRef<MarkdownEditorHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [tagInput, setTagInput] = useState('')
   const [showExport, setShowExport] = useState(false)
   const [showBacklinks, setShowBacklinks] = useState(false)
+  const [showMeta, setShowMeta] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
 
   // Notes that reference the current note by title via [[...]]
@@ -242,6 +253,33 @@ export default function EditorPage() {
       removeTag(note.tags[note.tags.length - 1])
     }
   }
+
+  // ── Metadata assignment ────────────────────────────────────────────────────
+  function handleSetNoteType(type: NoteType) {
+    if (!note) return
+    dispatch(updateNote({ id: note.id, noteType: type }))
+  }
+
+  function handleSetSprint(sprintId: string | null) {
+    if (!note) return
+    dispatch(updateNote({ id: note.id, sprintId: sprintId ?? undefined }))
+  }
+
+  function handleSetFolder(folderId: string | null) {
+    if (!note) return
+    dispatch(setNoteFolder({ noteId: note.id, folderId }))
+  }
+
+  // ── Close meta/export dropdowns when clicking outside ─────────────────────
+  useEffect(() => {
+    if (!showMeta && !showExport) return
+    function handleOutside() {
+      setShowMeta(false)
+      setShowExport(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [showMeta, showExport])
 
   // ── Image handling ─────────────────────────────────────────────────────────
   function readFileAsDataURL(file: File): Promise<string> {
@@ -479,6 +517,382 @@ export default function EditorPage() {
           <span style={{ opacity: 0.5 }}>·</span>
           <span>{charCount}c</span>
         </span>
+
+        {/* ── Metadata panel button ── */}
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            title="Asignar tipo, sprint y carpeta"
+            onMouseDown={e => e.stopPropagation()}
+            onClick={() => {
+              setShowMeta(v => !v)
+              setShowExport(false)
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              height: '28px',
+              padding: '0 8px',
+              borderRadius: 'var(--radius-md)',
+              border: `1px solid ${showMeta ? 'var(--accent-500)' : 'var(--border-2)'}`,
+              background: showMeta ? 'var(--accent-glow)' : 'var(--bg-2)',
+              color: 'var(--accent-400)',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-ui)',
+              fontSize: '11px',
+              fontWeight: 500,
+              transition: 'all var(--transition-fast)',
+              flexShrink: 0,
+            }}
+          >
+            <NoteTypeIcon type={note.noteType} size={13} />
+            <span style={{ color: 'var(--text-1)' }}>{NOTE_TYPE_META[note.noteType].label}</span>
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          {showMeta && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 6px)',
+                right: 0,
+                background: 'var(--bg-1)',
+                border: '1px solid var(--border-2)',
+                borderRadius: 'var(--radius-lg)',
+                boxShadow: 'var(--shadow-lg)',
+                zIndex: 60,
+                width: '260px',
+                overflow: 'hidden',
+              }}
+              onMouseDown={e => e.stopPropagation()}
+            >
+              {/* ── Tipo de nota ── */}
+              <div style={{ padding: '10px 12px 8px' }}>
+                <p
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '10px',
+                    color: 'var(--text-3)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.07em',
+                    margin: '0 0 8px',
+                  }}
+                >
+                  Tipo de nota
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
+                  {(Object.keys(NOTE_TYPE_META) as NoteType[]).map(type => {
+                    const isActive = note.noteType === type
+                    return (
+                      <button
+                        key={type}
+                        title={NOTE_TYPE_META[type].label}
+                        onClick={() => handleSetNoteType(type)}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '6px 4px',
+                          borderRadius: 'var(--radius-md)',
+                          border: `1px solid ${isActive ? 'var(--accent-500)' : 'transparent'}`,
+                          background: isActive ? 'var(--accent-glow)' : 'transparent',
+                          color: isActive ? 'var(--accent-400)' : 'var(--text-2)',
+                          cursor: 'pointer',
+                          fontFamily: 'var(--font-ui)',
+                          fontSize: '10px',
+                          transition: 'all var(--transition-fast)',
+                        }}
+                        onMouseEnter={e => {
+                          if (!isActive)
+                            (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+                        }}
+                        onMouseLeave={e => {
+                          if (!isActive)
+                            (e.currentTarget as HTMLElement).style.background = 'transparent'
+                        }}
+                      >
+                        <NoteTypeIcon type={type} size={14} />
+                        <span style={{ lineHeight: 1 }}>{NOTE_TYPE_META[type].label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div style={{ height: '1px', background: 'var(--border-1)', margin: '0 12px' }} />
+
+              {/* ── Sprint ── */}
+              <div style={{ padding: '10px 12px 8px' }}>
+                <p
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '10px',
+                    color: 'var(--text-3)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.07em',
+                    margin: '0 0 6px',
+                  }}
+                >
+                  Sprint
+                </p>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px',
+                    maxHeight: '130px',
+                    overflowY: 'auto',
+                  }}
+                >
+                  <button
+                    onClick={() => handleSetSprint(null)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '7px',
+                      padding: '5px 8px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: `1px solid ${!note.sprintId ? 'var(--accent-500)' : 'transparent'}`,
+                      background: !note.sprintId ? 'var(--accent-glow)' : 'transparent',
+                      color: !note.sprintId ? 'var(--accent-400)' : 'var(--text-3)',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-ui)',
+                      fontSize: '12px',
+                      textAlign: 'left' as const,
+                      transition: 'all var(--transition-fast)',
+                    }}
+                    onMouseEnter={e => {
+                      if (note.sprintId)
+                        (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+                    }}
+                    onMouseLeave={e => {
+                      if (note.sprintId)
+                        (e.currentTarget as HTMLElement).style.background = 'transparent'
+                    }}
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="16" />
+                      <line x1="8" y1="12" x2="16" y2="12" />
+                    </svg>
+                    Sin sprint
+                  </button>
+                  {sprints.map(sprint => {
+                    const isActive = note.sprintId === sprint.id
+                    return (
+                      <button
+                        key={sprint.id}
+                        onClick={() => handleSetSprint(sprint.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '7px',
+                          padding: '5px 8px',
+                          borderRadius: 'var(--radius-sm)',
+                          border: `1px solid ${isActive ? 'var(--accent-500)' : 'transparent'}`,
+                          background: isActive ? 'var(--accent-glow)' : 'transparent',
+                          color: isActive ? 'var(--accent-400)' : 'var(--text-1)',
+                          cursor: 'pointer',
+                          fontFamily: 'var(--font-ui)',
+                          fontSize: '12px',
+                          textAlign: 'left' as const,
+                          transition: 'all var(--transition-fast)',
+                          overflow: 'hidden',
+                          whiteSpace: 'nowrap',
+                          textOverflow: 'ellipsis',
+                        }}
+                        onMouseEnter={e => {
+                          if (!isActive)
+                            (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+                        }}
+                        onMouseLeave={e => {
+                          if (!isActive)
+                            (e.currentTarget as HTMLElement).style.background = 'transparent'
+                        }}
+                      >
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                        >
+                          <polyline points="13 17 18 12 13 7" />
+                          <polyline points="6 17 11 12 6 7" />
+                        </svg>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {sprint.name}
+                        </span>
+                        {isActive && (
+                          <span style={{ marginLeft: 'auto', fontSize: '10px', opacity: 0.7 }}>
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                  {sprints.length === 0 && (
+                    <p
+                      style={{
+                        fontSize: '11px',
+                        color: 'var(--text-3)',
+                        margin: '2px 8px',
+                        fontStyle: 'italic',
+                      }}
+                    >
+                      No hay sprints. Créalos en Daily.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Carpeta (si hay carpetas) ── */}
+              {folders.length > 0 && (
+                <>
+                  <div style={{ height: '1px', background: 'var(--border-1)', margin: '0 12px' }} />
+                  <div style={{ padding: '10px 12px 10px' }}>
+                    <p
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '10px',
+                        color: 'var(--text-3)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.07em',
+                        margin: '0 0 6px',
+                      }}
+                    >
+                      Carpeta
+                    </p>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                        maxHeight: '120px',
+                        overflowY: 'auto',
+                      }}
+                    >
+                      <button
+                        onClick={() => handleSetFolder(null)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '7px',
+                          padding: '5px 8px',
+                          borderRadius: 'var(--radius-sm)',
+                          border: `1px solid ${!note.folderId ? 'var(--accent-500)' : 'transparent'}`,
+                          background: !note.folderId ? 'var(--accent-glow)' : 'transparent',
+                          color: !note.folderId ? 'var(--accent-400)' : 'var(--text-3)',
+                          cursor: 'pointer',
+                          fontFamily: 'var(--font-ui)',
+                          fontSize: '12px',
+                          textAlign: 'left' as const,
+                          transition: 'all var(--transition-fast)',
+                        }}
+                        onMouseEnter={e => {
+                          if (note.folderId)
+                            (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+                        }}
+                        onMouseLeave={e => {
+                          if (note.folderId)
+                            (e.currentTarget as HTMLElement).style.background = 'transparent'
+                        }}
+                      >
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="16" />
+                          <line x1="8" y1="12" x2="16" y2="12" />
+                        </svg>
+                        Sin carpeta
+                      </button>
+                      {folders.map(folder => {
+                        const isActive = note.folderId === folder.id
+                        const indent = folder.parentId ? 16 : 0
+                        return (
+                          <button
+                            key={folder.id}
+                            onClick={() => handleSetFolder(folder.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '7px',
+                              padding: '5px 8px',
+                              paddingLeft: `${8 + indent}px`,
+                              borderRadius: 'var(--radius-sm)',
+                              border: `1px solid ${isActive ? 'var(--accent-500)' : 'transparent'}`,
+                              background: isActive ? 'var(--accent-glow)' : 'transparent',
+                              color: isActive ? 'var(--accent-400)' : 'var(--text-1)',
+                              cursor: 'pointer',
+                              fontFamily: 'var(--font-ui)',
+                              fontSize: '12px',
+                              textAlign: 'left' as const,
+                              transition: 'all var(--transition-fast)',
+                              overflow: 'hidden',
+                              whiteSpace: 'nowrap',
+                              textOverflow: 'ellipsis',
+                            }}
+                            onMouseEnter={e => {
+                              if (!isActive)
+                                (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+                            }}
+                            onMouseLeave={e => {
+                              if (!isActive)
+                                (e.currentTarget as HTMLElement).style.background = 'transparent'
+                            }}
+                          >
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                            >
+                              <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+                            </svg>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {folder.name}
+                            </span>
+                            {isActive && (
+                              <span style={{ marginLeft: 'auto', fontSize: '10px', opacity: 0.7 }}>
+                                ✓
+                              </span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Duplicate + Delete */}
         <button
