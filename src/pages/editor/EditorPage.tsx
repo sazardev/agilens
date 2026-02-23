@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '@/store'
 import { setActiveNoteId, setEditorPreviewMode } from '@/store/slices/uiSlice'
-import { updateNote, addNote, deleteNote } from '@/store/slices/notesSlice'
+import { updateNote, addNote, deleteNote, addAttachment } from '@/store/slices/notesSlice'
+import type { NoteAttachment } from '@/types'
 import { nanoid } from 'nanoid'
 import MarkdownEditor, {
   type MarkdownEditorHandle,
@@ -185,9 +186,11 @@ export default function EditorPage() {
   const allNotes = useAppSelector(s => s.notes.notes)
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editorRef = useRef<MarkdownEditorHandle>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [tagInput, setTagInput] = useState('')
   const [showExport, setShowExport] = useState(false)
   const [showBacklinks, setShowBacklinks] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
 
   // Notes that reference the current note by title via [[...]]
   const backlinks =
@@ -238,6 +241,64 @@ export default function EditorPage() {
     } else if (e.key === 'Backspace' && !tagInput && note?.tags.length) {
       removeTag(note.tags[note.tags.length - 1])
     }
+  }
+
+  // ── Image handling ─────────────────────────────────────────────────────────
+  function readFileAsDataURL(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  async function handleImageFiles(files: File[]) {
+    if (!note) return
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) continue
+      const dataUrl = await readFileAsDataURL(file)
+      const id = nanoid()
+      const attachment: NoteAttachment = {
+        id,
+        name: file.name,
+        type: 'image',
+        dataUrl,
+        size: file.size,
+      }
+      dispatch(addAttachment({ noteId: note.id, attachment }))
+      const alt = file.name.replace(/\.[^.]+$/, '')
+      editorRef.current?.insertText(`![${alt}](attachment:${id})\n`)
+    }
+  }
+
+  function handleEditorPaste(e: React.ClipboardEvent) {
+    const items = Array.from(e.clipboardData.items)
+    const imageItems = items.filter(item => item.type.startsWith('image/'))
+    if (imageItems.length === 0) return
+    e.preventDefault()
+    const files = imageItems.map(item => item.getAsFile()).filter(Boolean) as File[]
+    void handleImageFiles(files)
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    const hasFiles = Array.from(e.dataTransfer.items).some(
+      i => i.kind === 'file' && i.type.startsWith('image/')
+    )
+    if (!hasFiles) return
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  function handleDragLeave() {
+    setIsDragging(false)
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragging(false)
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'))
+    if (files.length > 0) void handleImageFiles(files)
   }
 
   async function handlePrint() {
@@ -661,11 +722,99 @@ export default function EditorPage() {
               ))}
             </div>
           ))}
+          {/* image upload button */}
+          <div
+            style={{
+              width: '1px',
+              height: '16px',
+              background: 'var(--border-2)',
+              margin: '0 4px',
+              flexShrink: 0,
+            }}
+          />
+          <button
+            title="Subir imagen (o pegar / arrastrar)"
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '26px',
+              height: '26px',
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--accent-400)',
+              background: 'var(--accent-glow)',
+              transition: 'background var(--transition-fast), color var(--transition-fast)',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => {
+              ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+            }}
+            onMouseLeave={e => {
+              ;(e.currentTarget as HTMLElement).style.background = 'var(--accent-glow)'
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              viewBox="0 0 24 24"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+              <polyline points="16 3 16 8 21 8" />
+            </svg>
+          </button>
+          {/* hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: 'none' }}
+            onChange={e => {
+              const files = Array.from(e.target.files ?? [])
+              if (files.length) void handleImageFiles(files)
+              e.target.value = ''
+            }}
+          />
         </div>
       )}
 
       {/* ── Panes ── */}
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', position: 'relative' }}>
+        {isDragging && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 10,
+              pointerEvents: 'none',
+              border: '2px dashed var(--accent-500)',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--accent-glow)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-ui)',
+                fontSize: '14px',
+                color: 'var(--accent-400)',
+                fontWeight: 600,
+              }}
+            >
+              Suelta la imagen aquí
+            </span>
+          </div>
+        )}
         {(mode === 'edit' || mode === 'split') && (
           <div
             style={{
@@ -674,6 +823,10 @@ export default function EditorPage() {
               overflow: 'hidden',
               borderRight: mode === 'split' ? '1px solid var(--border-1)' : 'none',
             }}
+            onPaste={handleEditorPaste}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
           >
             <MarkdownEditor
               ref={editorRef}
@@ -687,7 +840,7 @@ export default function EditorPage() {
           <div
             style={{ width: mode === 'split' ? '50%' : '100%', height: '100%', overflow: 'hidden' }}
           >
-            <MarkdownPreview content={note.content} />
+            <MarkdownPreview content={note.content} attachments={note.attachments} />
           </div>
         )}
       </div>

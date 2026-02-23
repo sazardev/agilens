@@ -5,7 +5,7 @@ import { useAppSelector } from '@/store'
 import CodeBlock from './CodeBlock'
 import type { Components } from 'react-markdown'
 import type { ExtraProps } from 'react-markdown'
-import type { Note } from '@/types'
+import type { Note, NoteAttachment } from '@/types'
 
 // ─── Wiki links preprocessing ────────────────────────────────────────────────
 function preprocessWikiLinks(text: string, notesList: Note[]): string {
@@ -58,9 +58,10 @@ const FONT_STACKS: Record<string, string> = {
 
 interface Props {
   content: string
+  attachments?: NoteAttachment[]
 }
 
-export default function MarkdownPreview({ content }: Props) {
+export default function MarkdownPreview({ content, attachments = [] }: Props) {
   const navigate = useNavigate()
   const fontSize = useAppSelector(s => s.settings.editorFontSize)
   const lineHeight = useAppSelector(s => s.settings.lineHeight ?? 1.7)
@@ -86,7 +87,8 @@ export default function MarkdownPreview({ content }: Props) {
           ? children
           : ''
       const slug = slugify(text)
-      const Tag = `h${level}` as keyof JSX.IntrinsicElements
+      type HeadingTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
+      const Tag = `h${level}` as HeadingTag
       return (
         <Tag id={slug} style={{ scrollMarginTop: '8px' }} {...(rest as object)}>
           {children}
@@ -237,9 +239,16 @@ export default function MarkdownPreview({ content }: Props) {
 
   // ── Image ─────────────────────────────────────────────────────────────────
   function Img({ src, alt, ...rest }: React.ImgHTMLAttributes<HTMLImageElement> & ExtraProps) {
+    // Resolve attachment:ID references to local data URLs
+    let resolvedSrc = src
+    if (src?.startsWith('attachment:')) {
+      const id = src.slice('attachment:'.length)
+      const found = attachments.find(a => a.id === id)
+      resolvedSrc = found?.dataUrl ?? src
+    }
     return (
       <figure className="md-figure">
-        <img src={src} alt={alt} className="md-img" {...(rest as object)} />
+        <img src={resolvedSrc} alt={alt} className="md-img" {...(rest as object)} />
         {alt && <figcaption className="md-figcaption">{alt}</figcaption>}
       </figure>
     )

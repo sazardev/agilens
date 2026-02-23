@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppDispatch, useAppSelector } from '@/store'
@@ -11,6 +12,7 @@ import { useEffect, useState } from 'react'
 import TemplatePickerModal from '@/components/notes/TemplatePickerModal'
 import { expandTemplate } from '@/store/slices/templatesSlice'
 import { NOTE_TYPE_ICONS } from '@/lib/noteIcons'
+import FolderTree from '@/components/notes/FolderTree'
 
 const IconNotes = () => (
   <svg
@@ -180,6 +182,7 @@ export default function Sidebar() {
   const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null)
   const [groupBy, setGroupBy] = useState<GroupBy>('none')
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
+  const [sidebarTab, setSidebarTab] = useState<'list' | 'folders'>('list')
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 768px)')
@@ -206,6 +209,7 @@ export default function Sidebar() {
       title,
       content,
       tags: [],
+      attachments: [],
       createdAt: now,
       updatedAt: now,
       noteType: tpl?.type ?? 'note',
@@ -584,343 +588,401 @@ export default function Sidebar() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.1 }}
-              style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+              }}
             >
-              {/* GroupBy selector */}
+              {/* Tab switcher: Lista | Carpetas */}
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '3px',
-                  padding: '4px 8px',
                   borderBottom: '1px solid var(--border-1)',
                   flexShrink: 0,
+                  padding: '0 8px',
+                  gap: '2px',
                 }}
               >
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '9px',
-                    color: 'var(--text-3)',
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
-                    paddingRight: '4px',
-                    flexShrink: 0,
-                  }}
-                >
-                  Grup.
-                </span>
-                {GROUP_BY_OPTIONS.map(opt => (
+                {(['list', 'folders'] as const).map(tab => (
                   <button
-                    key={opt.value}
-                    onClick={() => setGroupBy(opt.value)}
-                    title={opt.title}
+                    key={tab}
+                    onClick={() => setSidebarTab(tab)}
                     style={{
-                      padding: '4px 6px',
-                      borderRadius: 'var(--radius-sm)',
+                      padding: '5px 10px',
                       border: 'none',
-                      background: groupBy === opt.value ? 'var(--accent-glow)' : 'transparent',
-                      color: groupBy === opt.value ? 'var(--accent-400)' : 'var(--text-3)',
+                      background: 'transparent',
+                      color: sidebarTab === tab ? 'var(--accent-400)' : 'var(--text-3)',
+                      borderBottom:
+                        sidebarTab === tab
+                          ? '2px solid var(--accent-500)'
+                          : '2px solid transparent',
                       cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.1s',
+                      fontSize: '11px',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: sidebarTab === tab ? 600 : 400,
+                      transition: 'all var(--transition-fast)',
+                      whiteSpace: 'nowrap',
+                      marginBottom: '-1px',
                     }}
                   >
-                    <opt.Icon />
+                    {tab === 'list' ? 'Lista' : 'Carpetas'}
                   </button>
                 ))}
               </div>
 
-              {/* Notes list */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px 8px' }}>
-                {(() => {
-                  const q = query.toLowerCase().trim()
-
-                  // Apply search filter
-                  const searched = q
-                    ? notes.filter(
-                        n =>
-                          n.title.toLowerCase().includes(q) ||
-                          n.content.toLowerCase().includes(q) ||
-                          n.tags.some(t => t.toLowerCase().includes(q)) ||
-                          (n.noteType && n.noteType.toLowerCase().includes(q))
-                      )
-                    : notes
-
-                  // Build groups
-                  type Group = { key: string; label: string; icon?: string; notes: Note[] }
-                  let groups: Group[] = []
-
-                  if (q || groupBy === 'none') {
-                    groups = [
-                      {
-                        key: 'all',
-                        label: q
-                          ? `${searched.length} resultado${searched.length !== 1 ? 's' : ''}`
-                          : 'Recientes',
-                        notes: q ? searched : searched.slice(0, 30),
-                      },
-                    ]
-                  } else if (groupBy === 'type') {
-                    const typeOrder: NoteType[] = [
-                      'note',
-                      'daily',
-                      'evidence',
-                      'technical',
-                      'meeting',
-                      'sprint',
-                      'task',
-                    ]
-                    groups = typeOrder
-                      .map(type => ({
-                        key: type,
-                        label: NOTE_TYPE_META[type].label,
-                        icon: NOTE_TYPE_META[type].icon,
-                        notes: searched.filter(n => (n.noteType ?? 'note') === type),
-                      }))
-                      .filter(g => g.notes.length > 0)
-                  } else if (groupBy === 'tag') {
-                    const allTags = Array.from(new Set(searched.flatMap(n => n.tags))).sort()
-                    const untagged = searched.filter(n => n.tags.length === 0)
-                    groups = [
-                      ...allTags.map(tag => ({
-                        key: tag,
-                        label: `#${tag}`,
-                        notes: searched.filter(n => n.tags.includes(tag)),
-                      })),
-                      ...(untagged.length > 0
-                        ? [{ key: '__untagged__', label: 'Sin etiqueta', notes: untagged }]
-                        : []),
-                    ]
-                  } else if (groupBy === 'sprint') {
-                    groups = [
-                      ...sprints.map(sp => ({
-                        key: sp.id,
-                        label: sp.name,
-                        icon: '🏃',
-                        notes: searched.filter(n => n.sprintId === sp.id),
-                      })),
-                      {
-                        key: '__no-sprint__',
-                        label: 'Sin sprint',
-                        notes: searched.filter(n => !n.sprintId),
-                      },
-                    ].filter(g => g.notes.length > 0)
-                  } else if (groupBy === 'alpha') {
-                    const letters = Array.from(
-                      new Set(searched.map(n => (n.title?.[0] ?? '#').toUpperCase()))
-                    ).sort()
-                    groups = letters.map(letter => ({
-                      key: letter,
-                      label: letter,
-                      notes: searched.filter(n => (n.title?.[0] ?? '#').toUpperCase() === letter),
-                    }))
-                  }
-
-                  if (groups.every(g => g.notes.length === 0) && searched.length === 0) {
-                    return (
-                      <p style={{ fontSize: '12px', color: 'var(--text-3)', padding: '8px' }}>
-                        {q ? 'Sin resultados' : 'Aún no hay notas. ¡Crea la primera!'}
-                      </p>
-                    )
-                  }
-
-                  return groups.map(group => (
-                    <div key={group.key}>
-                      {/* Group header */}
-                      <p
+              {/* ── Lista tab ─────────────────────────────── */}
+              {sidebarTab === 'list' && (
+                <>
+                  {/* GroupBy selector */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      padding: '4px 8px',
+                      borderBottom: '1px solid var(--border-1)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '9px',
+                        color: 'var(--text-3)',
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        paddingRight: '4px',
+                        flexShrink: 0,
+                      }}
+                    >
+                      Grup.
+                    </span>
+                    {GROUP_BY_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setGroupBy(opt.value)}
+                        title={opt.title}
                         style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '10px',
-                          color: 'var(--text-3)',
-                          letterSpacing: '0.08em',
-                          textTransform: 'uppercase',
-                          padding: '8px 8px 3px',
-                          margin: 0,
+                          padding: '4px 6px',
+                          borderRadius: 'var(--radius-sm)',
+                          border: 'none',
+                          background: groupBy === opt.value ? 'var(--accent-glow)' : 'transparent',
+                          color: groupBy === opt.value ? 'var(--accent-400)' : 'var(--text-3)',
+                          cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '4px',
+                          justifyContent: 'center',
+                          transition: 'all 0.1s',
                         }}
                       >
-                        {groupBy === 'type' &&
-                          (() => {
-                            const TypeIcon = NOTE_TYPE_ICONS[group.key as NoteType]
-                            return TypeIcon ? (
-                              <span style={{ display: 'flex', color: 'var(--text-3)' }}>
-                                <TypeIcon />
-                              </span>
-                            ) : null
-                          })()}
-                        {group.label}
-                        <span style={{ marginLeft: 'auto', opacity: 0.5 }}>
-                          {group.notes.length}
-                        </span>
-                      </p>
+                        <opt.Icon />
+                      </button>
+                    ))}
+                  </div>
 
-                      {/* Note items */}
-                      {group.notes.map(n => (
-                        <div
-                          key={n.id}
-                          style={{ position: 'relative' }}
-                          onMouseEnter={() => setHoveredNoteId(n.id)}
-                          onMouseLeave={() => setHoveredNoteId(null)}
-                        >
-                          <NavLink to={`/editor/${n.id}`} style={{ textDecoration: 'none' }}>
-                            {({ isActive }) => (
-                              <div
-                                style={{
-                                  padding: '5px 8px',
-                                  paddingRight: hoveredNoteId === n.id ? '56px' : '8px',
-                                  borderRadius: 'var(--radius-sm)',
-                                  marginBottom: '1px',
-                                  fontFamily: 'var(--font-ui)',
-                                  fontSize: '12px',
-                                  color: isActive ? 'var(--accent-400)' : 'var(--text-2)',
-                                  background: isActive
-                                    ? 'var(--accent-glow)'
-                                    : hoveredNoteId === n.id
-                                      ? 'var(--bg-3)'
-                                      : 'transparent',
-                                  cursor: 'pointer',
-                                  transition: 'all var(--transition-fast)',
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                  }}
-                                >
-                                  {n.noteType &&
-                                    n.noteType !== 'note' &&
-                                    groupBy !== 'type' &&
-                                    (() => {
-                                      const TypeIcon = NOTE_TYPE_ICONS[n.noteType as NoteType]
-                                      return TypeIcon ? (
-                                        <span
-                                          style={{
-                                            display: 'flex',
-                                            flexShrink: 0,
-                                            color: 'var(--text-3)',
-                                          }}
-                                        >
-                                          <TypeIcon />
-                                        </span>
-                                      ) : null
-                                    })()}
-                                  <span
-                                    style={{
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap',
-                                    }}
-                                  >
-                                    {n.title || 'Sin título'}
+                  {/* Notes list */}
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px 8px' }}>
+                    {(() => {
+                      const q = query.toLowerCase().trim()
+
+                      // Apply search filter
+                      const searched = q
+                        ? notes.filter(
+                            n =>
+                              n.title.toLowerCase().includes(q) ||
+                              n.content.toLowerCase().includes(q) ||
+                              n.tags.some(t => t.toLowerCase().includes(q)) ||
+                              (n.noteType && n.noteType.toLowerCase().includes(q))
+                          )
+                        : notes
+
+                      // Build groups
+                      type Group = { key: string; label: string; icon?: string; notes: Note[] }
+                      let groups: Group[] = []
+
+                      if (q || groupBy === 'none') {
+                        groups = [
+                          {
+                            key: 'all',
+                            label: q
+                              ? `${searched.length} resultado${searched.length !== 1 ? 's' : ''}`
+                              : 'Recientes',
+                            notes: q ? searched : searched.slice(0, 30),
+                          },
+                        ]
+                      } else if (groupBy === 'type') {
+                        const typeOrder: NoteType[] = [
+                          'note',
+                          'daily',
+                          'evidence',
+                          'technical',
+                          'meeting',
+                          'sprint',
+                          'task',
+                        ]
+                        groups = typeOrder
+                          .map(type => ({
+                            key: type,
+                            label: NOTE_TYPE_META[type].label,
+                            icon: NOTE_TYPE_META[type].icon,
+                            notes: searched.filter(n => (n.noteType ?? 'note') === type),
+                          }))
+                          .filter(g => g.notes.length > 0)
+                      } else if (groupBy === 'tag') {
+                        const allTags = Array.from(new Set(searched.flatMap(n => n.tags))).sort()
+                        const untagged = searched.filter(n => n.tags.length === 0)
+                        groups = [
+                          ...allTags.map(tag => ({
+                            key: tag,
+                            label: `#${tag}`,
+                            notes: searched.filter(n => n.tags.includes(tag)),
+                          })),
+                          ...(untagged.length > 0
+                            ? [{ key: '__untagged__', label: 'Sin etiqueta', notes: untagged }]
+                            : []),
+                        ]
+                      } else if (groupBy === 'sprint') {
+                        groups = [
+                          ...sprints.map(sp => ({
+                            key: sp.id,
+                            label: sp.name,
+                            icon: '🏃',
+                            notes: searched.filter(n => n.sprintId === sp.id),
+                          })),
+                          {
+                            key: '__no-sprint__',
+                            label: 'Sin sprint',
+                            notes: searched.filter(n => !n.sprintId),
+                          },
+                        ].filter(g => g.notes.length > 0)
+                      } else if (groupBy === 'alpha') {
+                        const letters = Array.from(
+                          new Set(searched.map(n => (n.title?.[0] ?? '#').toUpperCase()))
+                        ).sort()
+                        groups = letters.map(letter => ({
+                          key: letter,
+                          label: letter,
+                          notes: searched.filter(
+                            n => (n.title?.[0] ?? '#').toUpperCase() === letter
+                          ),
+                        }))
+                      }
+
+                      if (groups.every(g => g.notes.length === 0) && searched.length === 0) {
+                        return (
+                          <p style={{ fontSize: '12px', color: 'var(--text-3)', padding: '8px' }}>
+                            {q ? 'Sin resultados' : 'Aún no hay notas. ¡Crea la primera!'}
+                          </p>
+                        )
+                      }
+
+                      return groups.map(group => (
+                        <div key={group.key}>
+                          {/* Group header */}
+                          <p
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '10px',
+                              color: 'var(--text-3)',
+                              letterSpacing: '0.08em',
+                              textTransform: 'uppercase',
+                              padding: '8px 8px 3px',
+                              margin: 0,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            {groupBy === 'type' &&
+                              (() => {
+                                const TypeIcon = NOTE_TYPE_ICONS[group.key as NoteType]
+                                return TypeIcon ? (
+                                  <span style={{ display: 'flex', color: 'var(--text-3)' }}>
+                                    <TypeIcon />
                                   </span>
-                                </div>
-                                {n.tags.length > 0 && (
+                                ) : null
+                              })()}
+                            {group.label}
+                            <span style={{ marginLeft: 'auto', opacity: 0.5 }}>
+                              {group.notes.length}
+                            </span>
+                          </p>
+
+                          {/* Note items */}
+                          {group.notes.map(n => (
+                            <div
+                              key={n.id}
+                              style={{ position: 'relative' }}
+                              onMouseEnter={() => setHoveredNoteId(n.id)}
+                              onMouseLeave={() => setHoveredNoteId(null)}
+                            >
+                              <NavLink to={`/editor/${n.id}`} style={{ textDecoration: 'none' }}>
+                                {({ isActive }) => (
                                   <div
                                     style={{
-                                      display: 'flex',
-                                      gap: '3px',
-                                      marginTop: '2px',
-                                      flexWrap: 'wrap',
+                                      padding: '5px 8px',
+                                      paddingRight: hoveredNoteId === n.id ? '56px' : '8px',
+                                      borderRadius: 'var(--radius-sm)',
+                                      marginBottom: '1px',
+                                      fontFamily: 'var(--font-ui)',
+                                      fontSize: '12px',
+                                      color: isActive ? 'var(--accent-400)' : 'var(--text-2)',
+                                      background: isActive
+                                        ? 'var(--accent-glow)'
+                                        : hoveredNoteId === n.id
+                                          ? 'var(--bg-3)'
+                                          : 'transparent',
+                                      cursor: 'pointer',
+                                      transition: 'all var(--transition-fast)',
                                     }}
                                   >
-                                    {n.tags.slice(0, 3).map(t => (
-                                      <button
-                                        key={t}
-                                        onClick={e => {
-                                          e.preventDefault()
-                                          e.stopPropagation()
-                                          setQuery(t)
-                                        }}
-                                        title={`Filtrar por #${t}`}
+                                    <div
+                                      style={{
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                      }}
+                                    >
+                                      {n.noteType &&
+                                        n.noteType !== 'note' &&
+                                        groupBy !== 'type' &&
+                                        (() => {
+                                          const TypeIcon = NOTE_TYPE_ICONS[n.noteType as NoteType]
+                                          return TypeIcon ? (
+                                            <span
+                                              style={{
+                                                display: 'flex',
+                                                flexShrink: 0,
+                                                color: 'var(--text-3)',
+                                              }}
+                                            >
+                                              <TypeIcon />
+                                            </span>
+                                          ) : null
+                                        })()}
+                                      <span
                                         style={{
-                                          fontSize: '9px',
-                                          padding: '1px 5px',
-                                          borderRadius: '3px',
-                                          background: 'var(--accent-glow)',
-                                          color: 'var(--accent-400)',
-                                          fontFamily: 'var(--font-mono)',
-                                          border: 'none',
-                                          cursor: 'pointer',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap',
                                         }}
                                       >
-                                        {t}
-                                      </button>
-                                    ))}
+                                        {n.title || 'Sin título'}
+                                      </span>
+                                    </div>
+                                    {n.tags.length > 0 && (
+                                      <div
+                                        style={{
+                                          display: 'flex',
+                                          gap: '3px',
+                                          marginTop: '2px',
+                                          flexWrap: 'wrap',
+                                        }}
+                                      >
+                                        {n.tags.slice(0, 3).map(t => (
+                                          <button
+                                            key={t}
+                                            onClick={e => {
+                                              e.preventDefault()
+                                              e.stopPropagation()
+                                              setQuery(t)
+                                            }}
+                                            title={`Filtrar por #${t}`}
+                                            style={{
+                                              fontSize: '9px',
+                                              padding: '1px 5px',
+                                              borderRadius: '3px',
+                                              background: 'var(--accent-glow)',
+                                              color: 'var(--accent-400)',
+                                              fontFamily: 'var(--font-mono)',
+                                              border: 'none',
+                                              cursor: 'pointer',
+                                            }}
+                                          >
+                                            {t}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
-                              </div>
-                            )}
-                          </NavLink>
-                          {/* Action buttons on hover */}
-                          {hoveredNoteId === n.id && (
-                            <div
-                              style={{
-                                position: 'absolute',
-                                top: '50%',
-                                right: '4px',
-                                transform: 'translateY(-50%)',
-                                display: 'flex',
-                                gap: '2px',
-                                zIndex: 1,
-                              }}
-                            >
-                              <button
-                                title="Duplicar nota"
-                                onClick={() => handleDuplicate(n)}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  width: '24px',
-                                  height: '24px',
-                                  borderRadius: 'var(--radius-sm)',
-                                  border: '1px solid var(--border-2)',
-                                  background: 'var(--bg-2)',
-                                  color: 'var(--text-2)',
-                                  cursor: 'pointer',
-                                  fontSize: '12px',
-                                }}
-                              >
-                                ⧉
-                              </button>
-                              <button
-                                title="Eliminar nota"
-                                onClick={() => handleDelete(n)}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  width: '24px',
-                                  height: '24px',
-                                  borderRadius: 'var(--radius-sm)',
-                                  border: '1px solid rgba(239,68,68,0.3)',
-                                  background: 'var(--bg-2)',
-                                  color: '#ef4444',
-                                  cursor: 'pointer',
-                                  fontSize: '15px',
-                                  lineHeight: 1,
-                                }}
-                              >
-                                ×
-                              </button>
+                              </NavLink>
+                              {/* Action buttons on hover */}
+                              {hoveredNoteId === n.id && (
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    top: '50%',
+                                    right: '4px',
+                                    transform: 'translateY(-50%)',
+                                    display: 'flex',
+                                    gap: '2px',
+                                    zIndex: 1,
+                                  }}
+                                >
+                                  <button
+                                    title="Duplicar nota"
+                                    onClick={() => handleDuplicate(n)}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      width: '24px',
+                                      height: '24px',
+                                      borderRadius: 'var(--radius-sm)',
+                                      border: '1px solid var(--border-2)',
+                                      background: 'var(--bg-2)',
+                                      color: 'var(--text-2)',
+                                      cursor: 'pointer',
+                                      fontSize: '12px',
+                                    }}
+                                  >
+                                    ⧉
+                                  </button>
+                                  <button
+                                    title="Eliminar nota"
+                                    onClick={() => handleDelete(n)}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      width: '24px',
+                                      height: '24px',
+                                      borderRadius: 'var(--radius-sm)',
+                                      border: '1px solid rgba(239,68,68,0.3)',
+                                      background: 'var(--bg-2)',
+                                      color: '#ef4444',
+                                      cursor: 'pointer',
+                                      fontSize: '15px',
+                                      lineHeight: 1,
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  ))
-                })()}
-              </div>
+                      ))
+                    })()}
+                  </div>
+                </>
+              )}
+
+              {/* ── Carpetas tab ───────────────────────── */}
+              {sidebarTab === 'folders' && (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                  <FolderTree />
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

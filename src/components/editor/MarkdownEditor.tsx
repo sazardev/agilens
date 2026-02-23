@@ -29,6 +29,7 @@ export type FormatCmd =
 export interface MarkdownEditorHandle {
   format: (cmd: FormatCmd) => void
   focus: () => void
+  insertText: (text: string) => void
 }
 
 // ─── Dark theme ───────────────────────────────────────────────────────────────
@@ -274,6 +275,10 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
     },
     focus() {
       cmRef.current?.view?.focus()
+    },
+    insertText(text: string) {
+      const view = cmRef.current?.view
+      if (view) insertAtCursor(view, text)
     },
   }))
 

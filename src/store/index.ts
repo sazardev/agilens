@@ -7,6 +7,7 @@ import settingsReducer, { defaultSettings } from './slices/settingsSlice'
 import uiReducer from './slices/uiSlice'
 import templatesReducer from './slices/templatesSlice'
 import { BUILTIN_TEMPLATES } from './slices/templatesSlice'
+import foldersReducer from './slices/foldersSlice'
 
 // ─── Persistence helpers ───────────────────────────────────────────────────────
 
@@ -24,7 +25,10 @@ function loadState() {
     }
     // Merge stored settings with current defaults — ensures new fields are always present
     if (saved.settings) {
-      saved.settings = { ...(defaultSettings as Record<string, unknown>), ...saved.settings }
+      saved.settings = {
+        ...(defaultSettings as unknown as Record<string, unknown>),
+        ...saved.settings,
+      }
     }
     // Migrate notes: ensure noteType exists
     if (saved.notes?.notes) {
@@ -37,6 +41,12 @@ function loadState() {
       const missing = BUILTIN_TEMPLATES.filter(t => !storedIds.has(t.id))
       saved.templates.templates = [...missing, ...stored]
     }
+    // Migrate notes: ensure attachments array exists
+    if (saved.notes?.notes) {
+      saved.notes.notes = saved.notes.notes.map(n =>
+        n.attachments ? n : { ...n, attachments: [] }
+      )
+    }
     return saved
   } catch {
     return undefined
@@ -45,16 +55,17 @@ function loadState() {
 
 function saveState(state: ReturnType<typeof store.getState>) {
   try {
-    const { notes, daily, settings, templates } = state
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ notes, daily, settings, templates }))
+    const { notes, daily, settings, templates, folders } = state
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ notes, daily, settings, templates, folders })
+    )
   } catch {
     // storage full or unavailable
   }
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
-
-const preloadedState = loadState()
 
 export const store = configureStore({
   reducer: {
@@ -64,8 +75,9 @@ export const store = configureStore({
     settings: settingsReducer,
     ui: uiReducer,
     templates: templatesReducer,
+    folders: foldersReducer,
   },
-  preloadedState,
+  preloadedState: loadState() as undefined,
 })
 
 // Persist notes + daily + settings to localStorage on every change

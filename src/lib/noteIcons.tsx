@@ -2,6 +2,7 @@
  * SVG icon components for each NoteType — no emojis.
  * Import these instead of NOTE_TYPE_META[type].icon.
  */
+import type { JSX } from 'react'
 import type { NoteType } from '@/types'
 
 export const IconTypeNote = () => (

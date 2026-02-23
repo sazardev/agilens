@@ -29,10 +29,26 @@ export interface Note {
   noteType: NoteType
   sprintId?: string
   templateId?: string
+  folderId?: string // Reference to a Folder id
   createdAt: string // ISO date
   updatedAt: string // ISO date
   attachments: NoteAttachment[]
   commitHash?: string
+}
+
+// ─── Folders ──────────────────────────────────────────────────────────────────
+
+/** Visual folder tree node */
+export interface Folder {
+  id: string
+  name: string
+  parentId: string | null // null = root
+  icon?: string // optional emoji override
+  color?: string // accent hex
+  isSystem?: boolean // auto-generated folders cannot be renamed/deleted by user
+  systemKey?: string // stable key for auto folders (e.g. 'type:technical' | 'sprint:xyz')
+  sortIndex: number
+  createdAt: string
 }
 
 export interface NoteAttachment {

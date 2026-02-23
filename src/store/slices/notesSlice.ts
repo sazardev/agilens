@@ -1,4 +1,5 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit'
+import { createSlice } from '@reduxjs/toolkit'
+import type { PayloadAction } from '@reduxjs/toolkit'
 import type { Note, NoteAttachment } from '@/types'
 
 interface NotesState {
@@ -47,6 +48,24 @@ const notesSlice = createSlice({
     setLoading(state, action: PayloadAction<boolean>) {
       state.loading = action.payload
     },
+    /** Move a single note to a folder (or root when null) */
+    setNoteFolder(state, action: PayloadAction<{ noteId: string; folderId: string | null }>) {
+      const note = state.notes.find(n => n.id === action.payload.noteId)
+      if (note) note.folderId = action.payload.folderId ?? undefined
+    },
+    /** Bulk assign — used by auto-organize  */
+    bulkSetNoteFolders(state, action: PayloadAction<Record<string, string>>) {
+      for (const [noteId, folderId] of Object.entries(action.payload)) {
+        const note = state.notes.find(n => n.id === noteId)
+        if (note) note.folderId = folderId
+      }
+    },
+    /** Clear all folder assignments (when folders are cleared) */
+    clearNoteFolders(state) {
+      state.notes.forEach(n => {
+        n.folderId = undefined
+      })
+    },
   },
 })
 
@@ -58,6 +77,9 @@ export const {
   addAttachment,
   removeAttachment,
   setLoading,
+  setNoteFolder,
+  bulkSetNoteFolders,
+  clearNoteFolders,
 } = notesSlice.actions
 
 export default notesSlice.reducer

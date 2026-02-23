@@ -10,7 +10,6 @@ import {
   deleteTemplate,
   updateTemplate,
   expandTemplate,
-  BUILTIN_TEMPLATES,
 } from '@/store/slices/templatesSlice'
 import type { NoteTemplate, NoteType } from '@/types'
 import { NOTE_TYPE_META } from '@/types'

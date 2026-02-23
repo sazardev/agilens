@@ -41,8 +41,6 @@ export default function DailyPage() {
     setShowSprintForm(false)
   }
 
-  const activeSprint = sprints.find(s => s.id === activeSprintId)
-
   function getOrCreate(): DailyEntry {
     if (entry) return entry
     const e: DailyEntry = {

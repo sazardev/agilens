@@ -1,4 +1,5 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
+import type { PayloadAction } from '@reduxjs/toolkit'
 import type { GitFileStatus, GitCommit, GitBranch, GitHubConfig } from '@/types'
 import * as gitClient from '@/lib/git/client'
 
