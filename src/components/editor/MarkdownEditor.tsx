@@ -125,7 +125,7 @@ const agilensThemeLight = createTheme({
 // ─── Layout theme factory ─────────────────────────────────────────────────────
 function makeLayoutTheme(isDark: boolean) {
   return EditorView.theme({
-    '&': { height: '100%', background: isDark ? '#0f0f12' : '#ffffff' },
+    '&': { height: '100%', overflow: 'hidden', background: isDark ? '#0f0f12' : '#ffffff' },
     '.cm-scroller': { overflow: 'auto', padding: '20px 24px', paddingBottom: '80px' },
     '.cm-content': { caretColor: 'var(--accent-500)', maxWidth: '760px', margin: '0 auto' },
     '.cm-line': { lineHeight: 'var(--editor-line-height, 1.8)', padding: '0' },
@@ -301,6 +301,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
       style={
         {
           height: '100%',
+          overflow: 'hidden',
           fontSize: `${fontSize}px`,
           '--editor-line-height': lineHeight,
         } as React.CSSProperties
@@ -310,6 +311,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
         ref={cmRef}
         value={value}
         height="100%"
+        style={{ height: '100%' }}
         theme={activeTheme}
         extensions={extensions}
         onChange={onChange}
