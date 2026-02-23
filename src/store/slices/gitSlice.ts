@@ -99,6 +99,21 @@ export const gitCheckout = createAsyncThunk(
   }
 )
 
+/**
+ * Detect an existing repo in LightningFS on app startup.
+ * If the repo exists, loads state and sets initialized = true.
+ * If not, silently resolves as null.
+ */
+export const gitDetect = createAsyncThunk('git/detect', async () => {
+  try {
+    // getLog will throw if .git doesn't exist
+    const snap = await snapshot(GIT_DIR)
+    return { rootDir: GIT_DIR, ...snap }
+  } catch {
+    return null
+  }
+})
+
 // ─── State ────────────────────────────────────────────────────────────────────
 
 interface GitState {
@@ -218,6 +233,17 @@ const gitSlice = createSlice({
 
     // ── gitCheckout ──
     builder.addCase(gitCheckout.fulfilled, (state, a) => {
+      state.status = a.payload.status
+      state.log = a.payload.log
+      state.branches = a.payload.branches
+      state.currentBranch = a.payload.currentBranch
+    })
+
+    // ── gitDetect ──
+    builder.addCase(gitDetect.fulfilled, (state, a) => {
+      if (!a.payload) return // no repo found
+      state.initialized = true
+      state.rootDir = a.payload.rootDir
       state.status = a.payload.status
       state.log = a.payload.log
       state.branches = a.payload.branches

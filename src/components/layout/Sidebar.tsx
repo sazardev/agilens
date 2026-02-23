@@ -2,13 +2,18 @@ import type { JSX } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppDispatch, useAppSelector } from '@/store'
-import { toggleSidebar, setSidebarOpen } from '@/store/slices/uiSlice'
+import {
+  toggleSidebar,
+  setSidebarOpen,
+  setSidebarWidth,
+  setSidebarAutoHide,
+} from '@/store/slices/uiSlice'
 import { addNote, deleteNote } from '@/store/slices/notesSlice'
 import { setActiveNoteId } from '@/store/slices/uiSlice'
 import type { Note, NoteType } from '@/types'
 import { NOTE_TYPE_META } from '@/types'
 import { nanoid } from 'nanoid'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import TemplatePickerModal from '@/components/notes/TemplatePickerModal'
 import { expandTemplate } from '@/store/slices/templatesSlice'
 import { NOTE_TYPE_ICONS } from '@/lib/noteIcons'
@@ -167,13 +172,29 @@ const GROUP_BY_OPTIONS: { value: GroupBy; Icon: () => JSX.Element; title: string
   { value: 'alpha', Icon: IconGroupAlpha, title: 'Alfabético' },
 ]
 
-const W_OPEN = 240
 const W_CLOSED = 52
+// ─── Pin icon ─────────────────────────────────────────────────────────────────
+const IconPin = ({ active }: { active: boolean }) => (
+  <svg
+    width="13"
+    height="13"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    viewBox="0 0 24 24"
+  >
+    <line x1="12" y1="17" x2="12" y2="22" />
+    <path d="M5 17h14v-1.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V6h1a2 2 0 000-4H8a2 2 0 000 4h1v4.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V17" />
+    {active && <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" strokeWidth="1.8" />}
+  </svg>
+)
 
 export default function Sidebar() {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const isOpen = useAppSelector(s => s.ui.sidebarOpen)
+  const sidebarWidth = useAppSelector(s => s.ui.sidebarWidth)
+  const sidebarAutoHide = useAppSelector(s => s.ui.sidebarAutoHide)
   const notes = useAppSelector(s => s.notes.notes)
   const activeNoteId = useAppSelector(s => s.ui.activeNoteId)
   const sprints = useAppSelector(s => s.daily.sprints)
@@ -182,7 +203,16 @@ export default function Sidebar() {
   const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null)
   const [groupBy, setGroupBy] = useState<GroupBy>('none')
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
-  const [sidebarTab, setSidebarTab] = useState<'list' | 'folders'>('list')
+  const [sidebarTab, setSidebarTab] = useState<'list' | 'folders'>('folders')
+  // ── Resize drag ────────────────────────────────────────────────────────────
+  const resizingRef = useRef(false)
+  const startXRef = useRef(0)
+  const startWidthRef = useRef(0)
+  // ── Auto-hide float state ──────────────────────────────────────────────────
+  const [floatOpen, setFloatOpen] = useState(false)
+  const floatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Effective open: when auto-hide mode, driven by hover; otherwise by Redux
+  const effectiveOpen = sidebarAutoHide ? floatOpen : isOpen
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 768px)')
@@ -195,6 +225,53 @@ export default function Sidebar() {
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [dispatch])
+
+  // ── Resize drag handlers ───────────────────────────────────────────────────
+  function startResize(e: React.MouseEvent) {
+    resizingRef.current = true
+    startXRef.current = e.clientX
+    startWidthRef.current = sidebarWidth
+    const onMove = (ev: MouseEvent) => {
+      if (!resizingRef.current) return
+      const delta = ev.clientX - startXRef.current
+      const clamped = Math.min(520, Math.max(180, startWidthRef.current + delta))
+      dispatch(setSidebarWidth(clamped))
+    }
+    const onUp = () => {
+      resizingRef.current = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    e.preventDefault()
+  }
+
+  // ── Auto-hide hover handlers ────────────────────────────────────────────
+  function handleSidebarEnter() {
+    if (!sidebarAutoHide) return
+    if (floatTimerRef.current) clearTimeout(floatTimerRef.current)
+    setFloatOpen(true)
+  }
+  function handleSidebarLeave() {
+    if (!sidebarAutoHide) return
+    floatTimerRef.current = setTimeout(() => setFloatOpen(false), 350)
+  }
+  function toggleAutoHide() {
+    const next = !sidebarAutoHide
+    dispatch(setSidebarAutoHide(next))
+    if (next) {
+      // entering auto-hide: ensure float tracks current open state
+      setFloatOpen(isOpen)
+    } else {
+      // leaving auto-hide: sync Redux open to float state
+      dispatch(setSidebarOpen(floatOpen))
+    }
+  }
 
   const defaultTemplateId = useAppSelector(s => s.templates.defaultTemplateId)
   const allTemplates = useAppSelector(s => s.templates.templates)
@@ -270,10 +347,22 @@ export default function Sidebar() {
       )}
       <motion.aside
         animate={{
-          width: isMobile ? (isOpen ? W_OPEN : 0) : isOpen ? W_OPEN : W_CLOSED,
-          x: isMobile && !isOpen ? -W_OPEN : 0,
+          width: isMobile
+            ? isOpen
+              ? sidebarWidth
+              : 0
+            : sidebarAutoHide
+              ? floatOpen
+                ? sidebarWidth
+                : W_CLOSED
+              : isOpen
+                ? sidebarWidth
+                : W_CLOSED,
+          x: isMobile && !isOpen ? -sidebarWidth : 0,
         }}
         transition={{ duration: 0.18, ease: 'easeInOut' }}
+        onMouseEnter={handleSidebarEnter}
+        onMouseLeave={handleSidebarLeave}
         style={{
           position: 'fixed',
           left: 0,
@@ -283,9 +372,10 @@ export default function Sidebar() {
           flexDirection: 'column',
           borderRight: '1px solid var(--border-1)',
           background: 'var(--bg-1)',
-          zIndex: 20,
+          zIndex: sidebarAutoHide && floatOpen ? 25 : 20,
           overflow: 'hidden',
-          boxShadow: isMobile && isOpen ? 'var(--shadow-lg)' : 'none',
+          boxShadow:
+            (isMobile && isOpen) || (sidebarAutoHide && floatOpen) ? 'var(--shadow-lg)' : 'none',
         }}
       >
         {/* Header */}
@@ -301,7 +391,7 @@ export default function Sidebar() {
           }}
         >
           <AnimatePresence initial={false}>
-            {isOpen && (
+            {effectiveOpen && (
               <motion.span
                 key="logo"
                 initial={{ opacity: 0 }}
@@ -320,6 +410,50 @@ export default function Sidebar() {
               >
                 Agilens
               </motion.span>
+            )}
+          </AnimatePresence>
+          <AnimatePresence initial={false}>
+            {effectiveOpen && (
+              <motion.button
+                key="pin-btn"
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                transition={{ duration: 0.1 }}
+                onClick={toggleAutoHide}
+                title={
+                  sidebarAutoHide
+                    ? 'Fijar panel (modo normal)'
+                    : 'Ocultar panel automáticamente (hover)'
+                }
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '26px',
+                  height: '26px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: sidebarAutoHide ? 'var(--accent-glow)' : 'transparent',
+                  color: sidebarAutoHide ? 'var(--accent-400)' : 'var(--text-2)',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  marginLeft: '4px',
+                  transition: 'color var(--transition-fast), background var(--transition-fast)',
+                }}
+                onMouseEnter={e => {
+                  const el = e.currentTarget as HTMLElement
+                  el.style.color = 'var(--text-0)'
+                  el.style.background = 'var(--bg-3)'
+                }}
+                onMouseLeave={e => {
+                  const el = e.currentTarget as HTMLElement
+                  el.style.color = sidebarAutoHide ? 'var(--accent-400)' : 'var(--text-2)'
+                  el.style.background = sidebarAutoHide ? 'var(--accent-glow)' : 'transparent'
+                }}
+              >
+                <IconPin active={!sidebarAutoHide} />
+              </motion.button>
             )}
           </AnimatePresence>
           <button
@@ -366,9 +500,9 @@ export default function Sidebar() {
                 flex: 1,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: isOpen ? 'flex-start' : 'center',
+                justifyContent: effectiveOpen ? 'flex-start' : 'center',
                 gap: '7px',
-                padding: isOpen ? '7px 10px' : '7px',
+                padding: effectiveOpen ? '7px 10px' : '7px',
                 borderRadius: 'var(--radius-md)',
                 border: 'none',
                 background: 'var(--accent-600)',
@@ -390,7 +524,7 @@ export default function Sidebar() {
             >
               <IconPlus />
               <AnimatePresence initial={false}>
-                {isOpen && (
+                {effectiveOpen && (
                   <motion.span
                     key="new-label"
                     initial={{ opacity: 0, width: 0 }}
@@ -407,7 +541,7 @@ export default function Sidebar() {
 
             {/* Secondary: open template picker */}
             <AnimatePresence initial={false}>
-              {isOpen && (
+              {effectiveOpen && (
                 <motion.button
                   key="tpl-btn"
                   initial={{ opacity: 0, width: 0 }}
@@ -452,7 +586,7 @@ export default function Sidebar() {
 
         {/* Search — visible only when open */}
         <AnimatePresence initial={false}>
-          {isOpen && (
+          {effectiveOpen && (
             <motion.div
               key="search"
               initial={{ opacity: 0, height: 0 }}
@@ -483,30 +617,55 @@ export default function Sidebar() {
                 </svg>
                 <input
                   type="text"
-                  placeholder="Buscar notas\u2026"
+                  placeholder="Buscar notas…"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                   className="input-base"
-                  style={{ paddingLeft: '26px', fontSize: '12px', width: '100%' }}
+                  style={{
+                    paddingLeft: '26px',
+                    paddingRight: query ? '28px' : '8px',
+                    fontSize: '12px',
+                    width: '100%',
+                  }}
                 />
                 {query && (
                   <button
                     onClick={() => setQuery('')}
+                    title="Borrar búsqueda"
                     style={{
                       position: 'absolute',
-                      right: '8px',
+                      right: '6px',
                       top: '50%',
                       transform: 'translateY(-50%)',
                       background: 'transparent',
                       border: 'none',
                       color: 'var(--text-3)',
                       cursor: 'pointer',
-                      fontSize: '14px',
+                      padding: '2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: '3px',
                       lineHeight: 1,
-                      padding: 0,
+                    }}
+                    onMouseEnter={e => {
+                      ;(e.currentTarget as HTMLElement).style.color = 'var(--text-0)'
+                    }}
+                    onMouseLeave={e => {
+                      ;(e.currentTarget as HTMLElement).style.color = 'var(--text-3)'
                     }}
                   >
-                    \u00d7
+                    <svg
+                      width="11"
+                      height="11"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      viewBox="0 0 24 24"
+                    >
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
                   </button>
                 )}
               </div>
@@ -554,7 +713,7 @@ export default function Sidebar() {
                     <Icon />
                   </span>
                   <AnimatePresence initial={false}>
-                    {isOpen && (
+                    {effectiveOpen && (
                       <motion.span
                         key={to + '-label'}
                         initial={{ opacity: 0 }}
@@ -581,7 +740,7 @@ export default function Sidebar() {
 
         {/* Recent / filtered notes */}
         <AnimatePresence initial={false}>
-          {isOpen && (
+          {effectiveOpen && (
             <motion.div
               key="notes-list"
               initial={{ opacity: 0 }}
@@ -997,7 +1156,7 @@ export default function Sidebar() {
           }}
         >
           <AnimatePresence initial={false}>
-            {isOpen && (
+            {effectiveOpen && (
               <motion.p
                 key="version"
                 initial={{ opacity: 0 }}
@@ -1016,6 +1175,30 @@ export default function Sidebar() {
             )}
           </AnimatePresence>
         </div>
+
+        {/* Resize handle — drag right edge to resize */}
+        {effectiveOpen && !isMobile && (
+          <div
+            onMouseDown={startResize}
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              width: '5px',
+              height: '100%',
+              cursor: 'col-resize',
+              zIndex: 10,
+              background: 'transparent',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => {
+              ;(e.currentTarget as HTMLElement).style.background = 'var(--accent-600)'
+            }}
+            onMouseLeave={e => {
+              ;(e.currentTarget as HTMLElement).style.background = 'transparent'
+            }}
+          />
+        )}
       </motion.aside>
     </>
   )

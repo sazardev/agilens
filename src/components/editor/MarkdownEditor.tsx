@@ -30,6 +30,8 @@ export interface MarkdownEditorHandle {
   format: (cmd: FormatCmd) => void
   focus: () => void
   insertText: (text: string) => void
+  /** Returns the current document text directly from CodeMirror state */
+  getValue: () => string
 }
 
 // ─── Dark theme ───────────────────────────────────────────────────────────────
@@ -279,6 +281,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
     insertText(text: string) {
       const view = cmRef.current?.view
       if (view) insertAtCursor(view, text)
+    },
+    getValue() {
+      return cmRef.current?.view?.state.doc.toString() ?? ''
     },
   }))
 

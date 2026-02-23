@@ -5,6 +5,8 @@ import type { UIState } from '@/types'
 const initialState: UIState = {
   activeView: 'editor',
   sidebarOpen: true,
+  sidebarWidth: 240,
+  sidebarAutoHide: false,
   activeNoteId: null,
   editorPreviewMode: 'split',
 }
@@ -28,6 +30,12 @@ const uiSlice = createSlice({
     setEditorPreviewMode(state, action: PayloadAction<UIState['editorPreviewMode']>) {
       state.editorPreviewMode = action.payload
     },
+    setSidebarWidth(state, action: PayloadAction<number>) {
+      state.sidebarWidth = Math.min(520, Math.max(180, action.payload))
+    },
+    setSidebarAutoHide(state, action: PayloadAction<boolean>) {
+      state.sidebarAutoHide = action.payload
+    },
   },
 })
 
@@ -37,6 +45,8 @@ export const {
   setSidebarOpen,
   setActiveNoteId,
   setEditorPreviewMode,
+  setSidebarWidth,
+  setSidebarAutoHide,
 } = uiSlice.actions
 
 export default uiSlice.reducer

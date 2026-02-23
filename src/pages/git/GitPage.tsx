@@ -1,5 +1,6 @@
 import { useAppSelector, useAppDispatch } from '@/store'
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   gitInit,
   gitRefresh,
@@ -26,6 +27,7 @@ export default function GitPage() {
   const [commitMsg, setCommitMsg] = useState('')
   const [newBranch, setNewBranch] = useState('')
   const [showBranches, setShowBranches] = useState(false)
+  const navigate = useNavigate()
 
   // Refresh on mount when already initialized
   useEffect(() => {
@@ -59,56 +61,262 @@ export default function GitPage() {
   }
 
   if (!initialized) {
+    const authorName = settings.userName || 'Agilens User'
+    const authorEmail = settings.userEmail || 'dev@agilens.app'
+    const missingConfig = !settings.userName || !settings.userEmail
+    const isBufferError = error?.includes('Buffer') || error?.includes('buffer')
+
     return (
       <div
         style={{
           height: '100%',
+          overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '16px',
-          padding: '32px',
-          textAlign: 'center' as const,
+          gap: '24px',
+          padding: '40px 24px',
         }}
       >
+        {/* Icon */}
         <svg
-          width="48"
-          height="48"
+          width="44"
+          height="44"
           fill="none"
-          stroke="var(--text-3)"
-          strokeWidth="1"
+          stroke="var(--accent-400)"
+          strokeWidth="1.2"
           viewBox="0 0 24 24"
-          style={{ opacity: 0.35 }}
+          style={{ opacity: 0.7, flexShrink: 0 }}
         >
           <circle cx="18" cy="6" r="3" />
           <circle cx="6" cy="6" r="3" />
           <circle cx="6" cy="18" r="3" />
           <path d="M6 9v3a3 3 0 003 3h6" />
         </svg>
-        <div>
+
+        {/* Title + description */}
+        <div style={{ textAlign: 'center', maxWidth: '380px' }}>
           <h2
             style={{
-              fontSize: '16px',
-              fontWeight: 600,
+              fontSize: '18px',
+              fontWeight: 700,
               color: 'var(--text-0)',
-              margin: '0 0 6px',
+              margin: '0 0 8px',
               letterSpacing: '-0.02em',
             }}
           >
-            Git no inicializado
+            Versiona tus notas con Git
           </h2>
-          <p
-            style={{ fontSize: '13px', color: 'var(--text-2)', maxWidth: '300px', lineHeight: 1.6 }}
-          >
-            Inicializa un repositorio local en el navegador (LightningFS). Tus notas quedan
-            versionadas con isomorphic-git, sin servidor.
+          <p style={{ fontSize: '13px', color: 'var(--text-2)', lineHeight: 1.65, margin: 0 }}>
+            Agilens crea un repositorio Git <strong>dentro del navegador</strong>. Tus notas quedan
+            versionadas localmente y opcionalmente se pueden sincronizar con GitHub.
           </p>
-          {error && <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '8px' }}>{error}</p>}
         </div>
-        <button className="btn btn-primary" onClick={handleInit} disabled={loading}>
-          {loading ? 'Inicializando…' : 'Inicializar repositorio'}
-        </button>
+
+        {/* Steps */}
+        <div
+          style={{
+            display: 'flex',
+            gap: '10px',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            maxWidth: '420px',
+          }}
+        >
+          {[
+            { n: '1', label: 'Inicializa', desc: 'Crea el repo local en el navegador' },
+            { n: '2', label: 'Haz commits', desc: 'Guarda snapshots de tus notas' },
+            { n: '3', label: 'Sincroniza', desc: 'Push a GitHub cuando quieras' },
+          ].map(step => (
+            <div
+              key={step.n}
+              style={{
+                flex: '1 1 110px',
+                background: 'var(--bg-2)',
+                border: '1px solid var(--border-2)',
+                borderRadius: 'var(--radius-md)',
+                padding: '12px',
+                textAlign: 'center',
+              }}
+            >
+              <div
+                style={{
+                  width: '22px',
+                  height: '22px',
+                  borderRadius: '50%',
+                  background: 'var(--accent-glow)',
+                  border: '1px solid var(--accent-600)',
+                  color: 'var(--accent-400)',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 6px',
+                }}
+              >
+                {step.n}
+              </div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-0)' }}>
+                {step.label}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-3)', marginTop: '2px' }}>
+                {step.desc}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Author info */}
+        <div
+          style={{
+            background: 'var(--bg-2)',
+            border: `1px solid ${missingConfig ? 'rgba(251,146,60,0.4)' : 'var(--border-2)'}`,
+            borderRadius: 'var(--radius-md)',
+            padding: '10px 14px',
+            maxWidth: '380px',
+            width: '100%',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '11px',
+              color: 'var(--text-3)',
+              marginBottom: '4px',
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Autor del repositorio
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--text-1)' }}>
+            <strong style={{ color: 'var(--text-0)' }}>{authorName}</strong> &lt;{authorEmail}&gt;
+          </div>
+          {missingConfig && (
+            <div style={{ marginTop: '8px', fontSize: '12px', color: '#fb923c' }}>
+              Usando valores por defecto.{' '}
+              <button
+                onClick={() => navigate('/settings')}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--accent-400)',
+                  cursor: 'pointer',
+                  padding: 0,
+                  fontSize: '12px',
+                  textDecoration: 'underline',
+                }}
+              >
+                Configura tu nombre y email en Ajustes
+              </button>{' '}
+              para personalizar los commits.
+            </div>
+          )}
+        </div>
+
+        {/* Notes count */}
+        {notes.length > 0 && (
+          <p style={{ fontSize: '12px', color: 'var(--text-3)', textAlign: 'center', margin: 0 }}>
+            {notes.length} nota{notes.length !== 1 ? 's' : ''} se incluirán en el commit inicial.
+          </p>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div
+            style={{
+              background: 'rgba(239,68,68,0.08)',
+              border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 14px',
+              maxWidth: '380px',
+              width: '100%',
+            }}
+          >
+            {isBufferError ? (
+              <>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: '#ef4444',
+                    marginBottom: '4px',
+                  }}
+                >
+                  Error de compatibilidad del navegador
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.5 }}>
+                  <code
+                    style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#f87171' }}
+                  >
+                    Buffer
+                  </code>{' '}
+                  no está definido. Prueba a{' '}
+                  <button
+                    onClick={() => window.location.reload()}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--accent-400)',
+                      cursor: 'pointer',
+                      padding: 0,
+                      fontSize: '12px',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    recargar la página
+                  </button>{' '}
+                  e intentar de nuevo. Si el error persiste, prueba en Chrome o Edge.
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: '12px', color: '#f87171' }}>{error}</div>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button
+            className="btn btn-primary"
+            onClick={handleInit}
+            disabled={loading}
+            style={{ minWidth: '180px' }}
+          >
+            {loading ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  style={{ animation: 'spin 1s linear infinite' }}
+                >
+                  <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0" strokeLinecap="round" />
+                </svg>
+                Inicializando…
+              </span>
+            ) : (
+              'Inicializar repositorio'
+            )}
+          </button>
+          {error && (
+            <button
+              className="btn btn-ghost"
+              onClick={() => window.location.reload()}
+              style={{ minWidth: '120px' }}
+            >
+              Recargar página
+            </button>
+          )}
+        </div>
+
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
       </div>
     )
   }

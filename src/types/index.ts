@@ -174,6 +174,8 @@ export type AppView = 'editor' | 'daily' | 'git' | 'settings'
 export interface UIState {
   activeView: AppView
   sidebarOpen: boolean
+  sidebarWidth: number
+  sidebarAutoHide: boolean
   activeNoteId: string | null
   editorPreviewMode: 'edit' | 'split' | 'preview'
 }

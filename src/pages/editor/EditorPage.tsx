@@ -197,11 +197,32 @@ export default function EditorPage() {
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editorRef = useRef<MarkdownEditorHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const tagInputRef = useRef<HTMLInputElement>(null)
+  // Tracks the live (unsaved) content from CodeMirror — updated synchronously before debounce
+  const liveContentRef = useRef<string>(note?.content ?? '')
   const [tagInput, setTagInput] = useState('')
+  const [tagFocused, setTagFocused] = useState(false)
+  const [tagSuggIdx, setTagSuggIdx] = useState(-1)
   const [showExport, setShowExport] = useState(false)
   const [showBacklinks, setShowBacklinks] = useState(false)
   const [showMeta, setShowMeta] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+
+  // All tags across every note, deduplicated and sorted
+  const allExistingTags = Array.from(new Set(allNotes.flatMap(n => n.tags))).sort()
+
+  // Suggestions: existing tags that match input and aren't already on this note
+  const tagSuggestions =
+    tagFocused && tagInput.trim()
+      ? allExistingTags.filter(
+          t =>
+            t.includes(tagInput.trim().toLowerCase()) &&
+            t !== tagInput.trim().toLowerCase() &&
+            !note?.tags.includes(t)
+        )
+      : tagFocused && !tagInput.trim()
+        ? allExistingTags.filter(t => !note?.tags.includes(t)).slice(0, 8)
+        : []
 
   // Notes that reference the current note by title via [[...]]
   const backlinks =
@@ -213,9 +234,16 @@ export default function EditorPage() {
     if (noteId) dispatch(setActiveNoteId(noteId))
   }, [noteId, dispatch])
 
+  // Keep liveContentRef in sync when switching notes so image insertion
+  // uses the correct note's content as a base
+  useEffect(() => {
+    liveContentRef.current = note?.content ?? ''
+  }, [note?.id])
+
   const handleChange = useCallback(
     (content: string) => {
       if (!note) return
+      liveContentRef.current = content // always track live content synchronously
       if (saveTimeout.current) clearTimeout(saveTimeout.current)
       saveTimeout.current = setTimeout(() => {
         const title = content.match(/^#+ (.+)/m)?.[1] ?? 'Sin título'
@@ -245,10 +273,43 @@ export default function EditorPage() {
   }
 
   function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setTagSuggIdx(i => Math.min(i + 1, tagSuggestions.length - 1))
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setTagSuggIdx(i => Math.max(i - 1, -1))
+      return
+    }
+    if (e.key === 'Escape') {
+      setTagFocused(false)
+      setTagSuggIdx(-1)
+      tagInputRef.current?.blur()
+      return
+    }
+    if (
+      (e.key === 'Enter' || e.key === ',' || e.key === 'Tab') &&
+      tagSuggIdx >= 0 &&
+      tagSuggestions[tagSuggIdx]
+    ) {
+      e.preventDefault()
+      addTag(tagSuggestions[tagSuggIdx])
+      setTagInput('')
+      setTagSuggIdx(-1)
+      return
+    }
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault()
       addTag(tagInput)
       setTagInput('')
+      setTagSuggIdx(-1)
+    } else if (e.key === 'Tab' && tagInput.trim()) {
+      e.preventDefault()
+      addTag(tagInput)
+      setTagInput('')
+      setTagSuggIdx(-1)
     } else if (e.key === 'Backspace' && !tagInput && note?.tags.length) {
       removeTag(note.tags[note.tags.length - 1])
     }
@@ -293,6 +354,8 @@ export default function EditorPage() {
 
   async function handleImageFiles(files: File[]) {
     if (!note) return
+    // Accumulate markdown text for preview-only mode (no editor mounted)
+    let appendedMarkdown = ''
     for (const file of files) {
       if (!file.type.startsWith('image/')) continue
       const dataUrl = await readFileAsDataURL(file)
@@ -306,7 +369,31 @@ export default function EditorPage() {
       }
       dispatch(addAttachment({ noteId: note.id, attachment }))
       const alt = file.name.replace(/\.[^.]+$/, '')
-      editorRef.current?.insertText(`![${alt}](attachment:${id})\n`)
+      const markdown = `![${alt}](attachment:${id})\n`
+      if (editorRef.current) {
+        editorRef.current.insertText(markdown)
+      } else {
+        appendedMarkdown += markdown
+      }
+    }
+
+    // Immediately flush content to Redux so the preview updates without waiting the 400ms debounce
+    if (saveTimeout.current) clearTimeout(saveTimeout.current)
+
+    let finalContent: string
+    if (editorRef.current) {
+      // Read directly from CodeMirror's state — guaranteed up-to-date after insertText
+      finalContent = editorRef.current.getValue()
+    } else {
+      // Preview-only mode: append to base content
+      const base = liveContentRef.current || note.content
+      finalContent = base + (base.endsWith('\n') ? '' : '\n') + appendedMarkdown
+    }
+
+    if (finalContent) {
+      const title = finalContent.match(/^#+ (.+)/m)?.[1] ?? note.title
+      dispatch(updateNote({ id: note.id, content: finalContent, title }))
+      liveContentRef.current = finalContent
     }
   }
 
@@ -449,17 +536,21 @@ export default function EditorPage() {
             minWidth: 0,
             flexWrap: 'wrap',
             alignItems: 'center',
+            position: 'relative',
           }}
         >
           {note.tags.map(tag => (
             <span
               key={tag}
               className="tag tag-accent"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}
             >
               {tag}
               <button
-                onClick={() => removeTag(tag)}
+                onMouseDown={e => {
+                  e.preventDefault()
+                  removeTag(tag)
+                }}
                 style={{
                   background: 'transparent',
                   border: 'none',
@@ -476,30 +567,144 @@ export default function EditorPage() {
               </button>
             </span>
           ))}
-          <input
-            type="text"
-            value={tagInput}
-            onChange={e => setTagInput(e.target.value)}
-            onKeyDown={handleTagKeyDown}
-            onBlur={() => {
-              if (tagInput.trim()) {
-                addTag(tagInput)
-                setTagInput('')
-              }
-            }}
-            placeholder={note.tags.length === 0 ? 'Añadir etiqueta…' : '+'}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              fontFamily: 'var(--font-ui)',
-              fontSize: '12px',
-              color: 'var(--text-2)',
-              minWidth: '80px',
-              maxWidth: '120px',
-              padding: '2px 4px',
-            }}
-          />
+
+          {/* Input + dropdown */}
+          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+            <input
+              ref={tagInputRef}
+              type="text"
+              value={tagInput}
+              onChange={e => {
+                setTagInput(e.target.value)
+                setTagSuggIdx(-1)
+              }}
+              onKeyDown={handleTagKeyDown}
+              onFocus={() => setTagFocused(true)}
+              onBlur={() => {
+                // Delay so click on suggestion fires first
+                setTimeout(() => {
+                  setTagFocused(false)
+                  setTagSuggIdx(-1)
+                  if (tagInput.trim()) {
+                    addTag(tagInput)
+                    setTagInput('')
+                  }
+                }, 150)
+              }}
+              placeholder={note.tags.length === 0 ? 'Añadir etiqueta…' : '+etiqueta'}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                fontFamily: 'var(--font-ui)',
+                fontSize: '12px',
+                color: 'var(--text-2)',
+                minWidth: note.tags.length === 0 ? '120px' : '70px',
+                maxWidth: '150px',
+                padding: '2px 4px',
+              }}
+            />
+
+            {/* Suggestions dropdown */}
+            {tagSuggestions.length > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 4px)',
+                  left: 0,
+                  background: 'var(--bg-1)',
+                  border: '1px solid var(--border-2)',
+                  borderRadius: 'var(--radius-md)',
+                  boxShadow: 'var(--shadow-md)',
+                  zIndex: 80,
+                  minWidth: '160px',
+                  maxWidth: '240px',
+                  overflow: 'hidden',
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                }}
+              >
+                {tagInput.trim() && !allExistingTags.includes(tagInput.trim().toLowerCase()) && (
+                  <button
+                    onMouseDown={e => {
+                      e.preventDefault()
+                      addTag(tagInput)
+                      setTagInput('')
+                      setTagSuggIdx(-1)
+                      tagInputRef.current?.focus()
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      width: '100%',
+                      padding: '6px 10px',
+                      background: tagSuggIdx === -1 ? 'var(--bg-3)' : 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-ui)',
+                      fontSize: '12px',
+                      color: 'var(--accent-400)',
+                      textAlign: 'left' as const,
+                      borderBottom: '1px solid var(--border-1)',
+                    }}
+                  >
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                    >
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    Crear «{tagInput.trim().toLowerCase()}»
+                  </button>
+                )}
+                {tagSuggestions.map((sug, i) => (
+                  <button
+                    key={sug}
+                    onMouseDown={e => {
+                      e.preventDefault()
+                      addTag(sug)
+                      setTagInput('')
+                      setTagSuggIdx(-1)
+                      tagInputRef.current?.focus()
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      width: '100%',
+                      padding: '6px 10px',
+                      background: tagSuggIdx === i ? 'var(--accent-glow)' : 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-ui)',
+                      fontSize: '12px',
+                      color: tagSuggIdx === i ? 'var(--accent-400)' : 'var(--text-1)',
+                      textAlign: 'left' as const,
+                      transition: 'background var(--transition-fast)',
+                    }}
+                    onMouseEnter={() => setTagSuggIdx(i)}
+                  >
+                    <span
+                      style={{
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        background: 'var(--accent-500)',
+                        flexShrink: 0,
+                      }}
+                    />
+                    {sug}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Stats */}

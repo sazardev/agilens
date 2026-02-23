@@ -25,6 +25,8 @@ function HamburgerIcon() {
 export default function MainLayout() {
   const dispatch = useAppDispatch()
   const sidebarOpen = useAppSelector(s => s.ui.sidebarOpen)
+  const sidebarWidth = useAppSelector(s => s.ui.sidebarWidth)
+  const sidebarAutoHide = useAppSelector(s => s.ui.sidebarAutoHide)
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
@@ -35,7 +37,7 @@ export default function MainLayout() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  const w = sidebarOpen ? 'var(--sidebar-w-open)' : 'var(--sidebar-w-closed)'
+  const w = sidebarOpen && !sidebarAutoHide ? `${sidebarWidth}px` : 'var(--sidebar-w-closed)'
 
   return (
     <div

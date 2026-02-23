@@ -1,3 +1,8 @@
+// ─── Buffer polyfill (required by isomorphic-git in browser) ─────────────────
+import { Buffer } from 'buffer'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+;(globalThis as any).Buffer = (globalThis as any).Buffer ?? Buffer
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Provider } from 'react-redux'
