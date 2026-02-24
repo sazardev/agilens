@@ -2,17 +2,24 @@
  * KanbanPage — Tablero Kanban para notas de tipo tarea.
  * Drag-and-drop nativo, filtro por sprint/etiqueta, creación rápida.
  */
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { nanoid } from 'nanoid'
 import { useAppSelector, useAppDispatch } from '@/store'
-import { addNote, setKanbanStatus, updateNote } from '@/store/slices/notesSlice'
-import type { Note, KanbanStatus, Sprint } from '@/types'
-import { KANBAN_STATUS_META } from '@/types'
+import {
+  addNote,
+  setKanbanStatus,
+  updateNote,
+  setNotePriority,
+  setStoryPoints,
+} from '@/store/slices/notesSlice'
+import type { Note, KanbanStatus, Sprint, TaskPriority } from '@/types'
+import { KANBAN_STATUS_META, TASK_PRIORITY_META } from '@/types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const COLUMNS: KanbanStatus[] = ['backlog', 'todo', 'in-progress', 'review', 'done']
+const PRIORITY_ORDER: TaskPriority[] = ['critical', 'high', 'medium', 'low']
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -370,18 +377,61 @@ function TaskCard({
         />
       )}
 
-      {/* Title */}
-      <div
-        style={{
-          fontFamily: 'var(--font-ui)',
-          fontSize: '13px',
-          fontWeight: 500,
-          color: 'var(--text-0)',
-          lineHeight: 1.35,
-          marginBottom: '7px',
-        }}
-      >
-        {note.title || 'Sin título'}
+      {/* Title + priority badge */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '7px' }}>
+        <div
+          style={{
+            flex: 1,
+            fontFamily: 'var(--font-ui)',
+            fontSize: '13px',
+            fontWeight: 500,
+            color: 'var(--text-0)',
+            lineHeight: 1.35,
+          }}
+        >
+          {note.title || 'Sin título'}
+        </div>
+        {note.priority &&
+          (() => {
+            const pm = TASK_PRIORITY_META[note.priority]
+            return (
+              <span
+                style={{
+                  flexShrink: 0,
+                  padding: '1px 5px',
+                  borderRadius: '4px',
+                  background: pm.bg,
+                  color: pm.color,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  marginTop: '1px',
+                }}
+                title={pm.label}
+              >
+                {pm.short}
+              </span>
+            )
+          })()}
+        {note.storyPoints !== undefined && (
+          <span
+            style={{
+              flexShrink: 0,
+              padding: '1px 5px',
+              borderRadius: '4px',
+              background: 'rgba(250,204,21,0.12)',
+              color: '#facc15',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '9px',
+              fontWeight: 700,
+              marginTop: '1px',
+            }}
+            title="Story points"
+          >
+            {note.storyPoints}sp
+          </span>
+        )}
       </div>
 
       {/* Tags */}
@@ -431,17 +481,234 @@ function TaskCard({
         onClick={e => e.stopPropagation()}
       >
         <SprintBadge note={note} sprints={sprints} onAssign={onAssignSprint} />
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '10px',
-            color: 'var(--text-3)',
-          }}
-        >
-          {relTime(note.updatedAt)}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <PriorityPicker noteId={note.id} current={note.priority} />
+          <StoryPointsEditor noteId={note.id} value={note.storyPoints} />
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '10px',
+              color: 'var(--text-3)',
+            }}
+          >
+            {relTime(note.updatedAt)}
+          </span>
+        </div>
       </div>
     </div>
+  )
+}
+
+// ─── Priority picker ────────────────────────────────────────────────────────
+
+function PriorityPicker({ noteId, current }: { noteId: string; current?: TaskPriority }) {
+  const dispatch = useAppDispatch()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [open])
+
+  const meta = current ? TASK_PRIORITY_META[current] : null
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={e => {
+          e.stopPropagation()
+          setOpen(o => !o)
+        }}
+        title="Prioridad"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          padding: '2px 7px',
+          borderRadius: '5px',
+          border: `1px solid ${meta ? meta.color + '55' : 'var(--border-1)'}`,
+          background: meta ? meta.bg : 'var(--bg-3)',
+          color: meta ? meta.color : 'var(--text-3)',
+          fontFamily: 'var(--font-ui)',
+          fontSize: '10px',
+          fontWeight: 600,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {meta ? meta.label : 'Prioridad'}
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 'calc(100% + 4px)',
+            left: 0,
+            zIndex: 200,
+            background: 'var(--bg-2)',
+            border: '1px solid var(--border-1)',
+            borderRadius: '8px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+            padding: '4px',
+            minWidth: '120px',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          {(['critical', 'high', 'medium', 'low'] as TaskPriority[]).map(p => {
+            const pm = TASK_PRIORITY_META[p]
+            return (
+              <button
+                key={p}
+                onClick={() => {
+                  dispatch(setNotePriority({ id: noteId, priority: p }))
+                  setOpen(false)
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  padding: '6px 8px',
+                  borderRadius: '5px',
+                  border: 'none',
+                  background: current === p ? pm.bg : 'transparent',
+                  color: pm.color,
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: '12px',
+                  fontWeight: current === p ? 700 : 500,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = pm.bg)}
+                onMouseLeave={e =>
+                  (e.currentTarget.style.background = current === p ? pm.bg : 'transparent')
+                }
+              >
+                <span
+                  style={{
+                    width: '7px',
+                    height: '7px',
+                    borderRadius: '50%',
+                    background: pm.color,
+                    flexShrink: 0,
+                  }}
+                />
+                {pm.label}
+              </button>
+            )
+          })}
+          {current && (
+            <>
+              <div style={{ height: '1px', background: 'var(--border-1)', margin: '3px 4px' }} />
+              <button
+                onClick={() => {
+                  dispatch(setNotePriority({ id: noteId, priority: undefined }))
+                  setOpen(false)
+                }}
+                style={{
+                  display: 'flex',
+                  width: '100%',
+                  padding: '6px 8px',
+                  borderRadius: '5px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-3)',
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-3)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                Quitar prioridad
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Story points inline editor ───────────────────────────────────────────────
+
+function StoryPointsEditor({ noteId, value }: { noteId: string; value?: number }) {
+  const dispatch = useAppDispatch()
+  const [editing, setEditing] = useState(false)
+  const [input, setInput] = useState(String(value ?? ''))
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editing) {
+      setInput(String(value ?? ''))
+      setTimeout(() => inputRef.current?.select(), 0)
+    }
+  }, [editing, value])
+
+  function commit() {
+    const n = parseInt(input, 10)
+    dispatch(setStoryPoints({ id: noteId, points: isNaN(n) || n < 0 ? undefined : n }))
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') commit()
+          if (e.key === 'Escape') setEditing(false)
+        }}
+        onClick={e => e.stopPropagation()}
+        type="number"
+        min={0}
+        placeholder="SP"
+        style={{
+          width: '48px',
+          padding: '2px 5px',
+          borderRadius: '5px',
+          border: '1px solid var(--accent-500)',
+          background: 'var(--bg-1)',
+          color: 'var(--text-0)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: '10px',
+          outline: 'none',
+        }}
+      />
+    )
+  }
+
+  return (
+    <button
+      onClick={e => {
+        e.stopPropagation()
+        setEditing(true)
+      }}
+      title="Story points"
+      style={{
+        padding: '2px 7px',
+        borderRadius: '5px',
+        border: '1px solid rgba(250,204,21,0.3)',
+        background: value !== undefined ? 'rgba(250,204,21,0.1)' : 'var(--bg-3)',
+        color: value !== undefined ? '#facc15' : 'var(--text-3)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: '10px',
+        fontWeight: 600,
+        cursor: 'pointer',
+      }}
+    >
+      {value !== undefined ? `${value}sp` : 'sp'}
+    </button>
   )
 }
 
@@ -555,6 +822,26 @@ function KanbanColumn({
           >
             {notes.length}
           </span>
+          {/* Story points total */}
+          {(() => {
+            const total = notes.reduce((s, n) => s + (n.storyPoints ?? 0), 0)
+            return total > 0 ? (
+              <span
+                style={{
+                  padding: '1px 5px',
+                  borderRadius: '4px',
+                  background: 'rgba(250,204,21,0.10)',
+                  color: '#facc15',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '9px',
+                  fontWeight: 600,
+                }}
+                title="Story points totales"
+              >
+                {total}sp
+              </span>
+            ) : null
+          })()}
         </div>
         <button
           onClick={() => setShowAdd(a => !a)}
@@ -637,7 +924,7 @@ function KanbanColumn({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-type SortKey = 'updated' | 'created' | 'title'
+type SortKey = 'updated' | 'created' | 'title' | 'priority'
 
 export default function KanbanPage() {
   const dispatch = useAppDispatch()
@@ -648,6 +935,7 @@ export default function KanbanPage() {
 
   const [activeSprint, setActiveSprint] = useState<string | null>(null) // null = todos
   const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [activePriority, setActivePriority] = useState<TaskPriority | null>(null)
   const [sort, setSort] = useState<SortKey>('updated')
   const [showSortMenu, setShowSortMenu] = useState(false)
 
@@ -669,15 +957,22 @@ export default function KanbanPage() {
     if (activeTag) {
       notes = notes.filter(n => n.tags.includes(activeTag))
     }
+    if (activePriority) {
+      notes = notes.filter(n => n.priority === activePriority)
+    }
     // sort
     return [...notes].sort((a, b) => {
       if (sort === 'updated')
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
       if (sort === 'created')
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      if (sort === 'priority') {
+        const pi = (n: Note) => PRIORITY_ORDER.indexOf(n.priority ?? 'low')
+        return pi(a) - pi(b)
+      }
       return a.title.localeCompare(b.title)
     })
-  }, [taskNotes, activeSprint, activeTag, sort])
+  }, [taskNotes, activeSprint, activeTag, activePriority, sort])
 
   // Group by column
   const byStatus = useMemo(() => {
@@ -738,6 +1033,7 @@ export default function KanbanPage() {
     updated: 'Reciente',
     created: 'Creación',
     title: 'Título A-Z',
+    priority: 'Prioridad',
   }
 
   return (
@@ -1027,6 +1323,93 @@ export default function KanbanPage() {
             ))}
           </div>
         )}
+
+        {/* Priority filter chips */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            padding: '4px 18px 10px',
+            overflowX: 'auto',
+            scrollbarWidth: 'none',
+          }}
+        >
+          {activePriority && (
+            <button
+              onClick={() => setActivePriority(null)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: '2px 7px',
+                borderRadius: '999px',
+                background: 'var(--bg-3)',
+                color: 'var(--text-2)',
+                border: '1px solid var(--border-2)',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-ui)',
+                fontSize: '10px',
+              }}
+            >
+              <IcoX /> Todo
+            </button>
+          )}
+          {PRIORITY_ORDER.map(p => {
+            const pm = TASK_PRIORITY_META[p]
+            const isActive = activePriority === p
+            const cnt = taskNotes.filter(n => n.priority === p).length
+            return (
+              <button
+                key={p}
+                onClick={() => setActivePriority(isActive ? null : p)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: isActive ? pm.bg : 'var(--bg-2)',
+                  color: isActive ? pm.color : 'var(--text-3)',
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: '10px',
+                  fontWeight: isActive ? 600 : 400,
+                  outline: isActive ? `1px solid ${pm.color}` : 'none',
+                  transition: 'all var(--transition-fast)',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: pm.color,
+                    flexShrink: 0,
+                  }}
+                />
+                {pm.label}
+                {cnt > 0 && (
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '9px',
+                      background: 'var(--bg-3)',
+                      borderRadius: '4px',
+                      padding: '0 3px',
+                      color: 'var(--text-3)',
+                    }}
+                  >
+                    {cnt}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* ── Board ────────────────────────────────────────────────────────── */}

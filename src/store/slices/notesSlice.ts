@@ -101,6 +101,19 @@ const notesSlice = createSlice({
       const note = state.notes.find(n => n.id === action.payload.id)
       if (note) note.kanbanStatus = action.payload.status
     },
+    /** Set priority for a task note */
+    setNotePriority(
+      state,
+      action: PayloadAction<{ id: string; priority: import('@/types').TaskPriority | undefined }>
+    ) {
+      const note = state.notes.find(n => n.id === action.payload.id)
+      if (note) note.priority = action.payload.priority
+    },
+    /** Set story points for a task note */
+    setStoryPoints(state, action: PayloadAction<{ id: string; points: number | undefined }>) {
+      const note = state.notes.find(n => n.id === action.payload.id)
+      if (note) note.storyPoints = action.payload.points
+    },
   },
 })
 
@@ -120,6 +133,8 @@ export const {
   toggleNoteLocked,
   setNoteColor,
   setKanbanStatus,
+  setNotePriority,
+  setStoryPoints,
 } = notesSlice.actions
 
 export default notesSlice.reducer

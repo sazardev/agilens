@@ -10,7 +10,8 @@ import { useAppDispatch, useAppSelector } from '@/store'
 import { addSprint, updateSprint, deleteSprint, setActiveSprint } from '@/store/slices/dailySlice'
 import { updateNote } from '@/store/slices/notesSlice'
 import { updateImpediment } from '@/store/slices/impedimentsSlice'
-import type { Sprint, SprintStatus, Note, DailyEntry, Impediment } from '@/types'
+import type { Sprint, SprintStatus, Note, DailyEntry, Impediment, TaskPriority } from '@/types'
+import { TASK_PRIORITY_META } from '@/types'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1001,7 +1002,42 @@ function NoteRow({
         >
           {note.title}
         </div>
-        <div style={{ fontSize: '10px', color: 'var(--text-3)' }}>{meta.label}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' }}>
+          <span style={{ fontSize: '10px', color: 'var(--text-3)' }}>{meta.label}</span>
+          {note.noteType === 'task' &&
+            note.priority &&
+            (() => {
+              const pm = TASK_PRIORITY_META[note.priority as TaskPriority]
+              return (
+                <span
+                  style={{
+                    padding: '0 5px',
+                    borderRadius: '4px',
+                    background: pm.bg,
+                    color: pm.color,
+                    fontSize: '9px',
+                    fontWeight: 700,
+                  }}
+                >
+                  {pm.label}
+                </span>
+              )
+            })()}
+          {note.noteType === 'task' && note.storyPoints !== undefined && (
+            <span
+              style={{
+                padding: '0 5px',
+                borderRadius: '4px',
+                background: 'rgba(250,204,21,0.10)',
+                color: '#facc15',
+                fontSize: '9px',
+                fontWeight: 600,
+              }}
+            >
+              {note.storyPoints}sp
+            </span>
+          )}
+        </div>
       </div>
       <button
         onClick={onNavigate}
@@ -1156,6 +1192,254 @@ function DailyRow({ entry, onNavigate }: { entry: DailyEntry; onNavigate: () => 
   )
 }
 
+// ─── Burndown chart (SVG, no extra deps) ─────────────────────────────────────
+
+function BurndownChart({ sprint, tasks }: { sprint: Sprint; tasks: Note[] }) {
+  if (!sprint.startDate || !sprint.endDate || tasks.length === 0) return null
+  const todaySt = new Date().toISOString().split('T')[0]
+  const total = daysBetween(sprint.startDate, sprint.endDate)
+  if (total <= 0) return null
+
+  const totalPoints = tasks.reduce((s, t) => s + (t.storyPoints ?? 1), 0)
+
+  // Build day-by-day array from sprint start to end
+  const allDays: string[] = []
+  for (let i = 0; i <= total; i++) {
+    const d = new Date(sprint.startDate)
+    d.setDate(d.getDate() + i)
+    allDays.push(d.toISOString().split('T')[0])
+  }
+
+  // Remaining curve (up to today)
+  const doneTasks = tasks.filter(t => t.kanbanStatus === 'done')
+  const todayIdx = Math.min(
+    allDays.findIndex(d => d >= todaySt),
+    allDays.length - 1
+  )
+  const actualDays = allDays.slice(0, Math.max(1, todayIdx + 1))
+  const actual = actualDays.map(day => {
+    const donePoints = doneTasks
+      .filter(t => t.updatedAt.slice(0, 10) <= day)
+      .reduce((s, t) => s + (t.storyPoints ?? 1), 0)
+    return Math.max(0, totalPoints - donePoints)
+  })
+
+  // Ideal line (full sprint)
+  const ideal = allDays.map((_, i) => totalPoints - (totalPoints * i) / total)
+
+  const W = 280
+  const H = 110
+  const PAD = { top: 8, right: 8, bottom: 24, left: 28 }
+  const cW = W - PAD.left - PAD.right
+  const cH = H - PAD.top - PAD.bottom
+
+  const xS = (i: number) => PAD.left + (i / (allDays.length - 1)) * cW
+  const yS = (v: number) => PAD.top + cH - (v / totalPoints) * cH
+
+  const idealPath = ideal
+    .map((v, i) => `${i === 0 ? 'M' : 'L'}${xS(i).toFixed(1)},${yS(v).toFixed(1)}`)
+    .join(' ')
+  const actualPath = actual
+    .map((v, i) => `${i === 0 ? 'M' : 'L'}${xS(i).toFixed(1)},${yS(v).toFixed(1)}`)
+    .join(' ')
+
+  const remaining = actual[actual.length - 1] ?? totalPoints
+  const done = totalPoints - remaining
+
+  return (
+    <div
+      style={{
+        background: 'var(--bg-0)',
+        border: '1px solid var(--border-1)',
+        borderRadius: 'var(--radius-md)',
+        padding: '10px 12px',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '4px',
+        }}
+      >
+        <span
+          style={{
+            fontSize: '10px',
+            fontWeight: 600,
+            color: 'var(--text-3)',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Burndown del sprint
+        </span>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <span style={{ fontSize: '10px', color: '#34d399' }}>✓ {done}sp</span>
+          <span style={{ fontSize: '10px', color: '#fbbf24' }}>↑ {remaining}sp</span>
+        </div>
+      </div>
+
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: H, display: 'block' }}>
+        {/* Grid lines */}
+        {[0.5, 1].map(f => {
+          const y = yS(totalPoints * (1 - f)).toFixed(1)
+          return (
+            <g key={f}>
+              <line
+                x1={PAD.left}
+                y1={y}
+                x2={PAD.left + cW}
+                y2={y}
+                stroke="var(--border-1)"
+                strokeWidth="0.5"
+              />
+              <text
+                x={PAD.left - 3}
+                y={parseFloat(y) + 3}
+                textAnchor="end"
+                fontSize="7"
+                fill="var(--text-3)"
+              >
+                {Math.round(totalPoints * (1 - f))}
+              </text>
+            </g>
+          )
+        })}
+
+        {/* Axes */}
+        <line
+          x1={PAD.left}
+          y1={PAD.top}
+          x2={PAD.left}
+          y2={PAD.top + cH}
+          stroke="var(--border-2)"
+          strokeWidth="0.8"
+        />
+        <line
+          x1={PAD.left}
+          y1={PAD.top + cH}
+          x2={PAD.left + cW}
+          y2={PAD.top + cH}
+          stroke="var(--border-2)"
+          strokeWidth="0.8"
+        />
+
+        {/* Ideal (dashed) */}
+        <path
+          d={idealPath}
+          fill="none"
+          stroke="rgba(107,114,128,0.5)"
+          strokeWidth="1"
+          strokeDasharray="4,3"
+        />
+
+        {/* Actual */}
+        <path
+          d={actualPath}
+          fill="none"
+          stroke="#60a5fa"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+
+        {/* Today marker */}
+        {todayIdx >= 0 && todayIdx < allDays.length - 1 && (
+          <line
+            x1={xS(todayIdx).toFixed(1)}
+            y1={PAD.top}
+            x2={xS(todayIdx).toFixed(1)}
+            y2={PAD.top + cH}
+            stroke="#facc15"
+            strokeWidth="0.8"
+            strokeDasharray="3,2"
+            opacity="0.8"
+          />
+        )}
+
+        {/* Last actual dot */}
+        <circle
+          cx={xS(actual.length - 1).toFixed(1)}
+          cy={yS(actual[actual.length - 1] ?? totalPoints).toFixed(1)}
+          r="2.5"
+          fill="#60a5fa"
+        />
+
+        {/* Axis date labels */}
+        <text x={PAD.left} y={H - 3} fontSize="7" fill="var(--text-3)">
+          {sprint.startDate.slice(5)}
+        </text>
+        <text x={PAD.left + cW} y={H - 3} fontSize="7" fill="var(--text-3)" textAnchor="end">
+          {sprint.endDate.slice(5)}
+        </text>
+      </svg>
+
+      <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+        <span
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+            fontSize: '9px',
+            color: 'var(--text-3)',
+          }}
+        >
+          <svg width="14" height="6">
+            <line
+              x1="0"
+              y1="3"
+              x2="14"
+              y2="3"
+              stroke="rgba(107,114,128,0.55)"
+              strokeWidth="1"
+              strokeDasharray="3,2"
+            />
+          </svg>
+          Ideal
+        </span>
+        <span
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+            fontSize: '9px',
+            color: 'var(--text-3)',
+          }}
+        >
+          <svg width="14" height="6">
+            <line x1="0" y1="3" x2="14" y2="3" stroke="#60a5fa" strokeWidth="1.5" />
+          </svg>
+          Real
+        </span>
+        <span
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+            fontSize: '9px',
+            color: 'var(--text-3)',
+          }}
+        >
+          <svg width="14" height="6">
+            <line
+              x1="0"
+              y1="3"
+              x2="14"
+              y2="3"
+              stroke="#facc15"
+              strokeWidth="0.8"
+              strokeDasharray="3,2"
+              opacity="0.8"
+            />
+          </svg>
+          Hoy
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // ─── Tab types ────────────────────────────────────────────────────────────────
 
 type Tab = 'overview' | 'tasks' | 'notes' | 'impediments' | 'evidence' | 'daily' | 'retro'
@@ -1206,6 +1490,13 @@ function SprintDetail({
   const otherNotes = useMemo(
     () => linkedNotes.filter(n => n.noteType !== 'task' && n.noteType !== 'evidence'),
     [linkedNotes]
+  )
+  // Story points total
+  const totalSP = useMemo(() => tasks.reduce((s, t) => s + (t.storyPoints ?? 0), 0), [tasks])
+  const doneSP = useMemo(
+    () =>
+      tasks.filter(t => t.kanbanStatus === 'done').reduce((s, t) => s + (t.storyPoints ?? 0), 0),
+    [tasks]
   )
 
   // Impediments for this sprint
@@ -1509,7 +1800,11 @@ function SprintDetail({
               >
                 {[
                   { label: 'Tareas', value: tasks.length, color: 'var(--accent-400)' },
-                  { label: 'Evidencias', value: evidence.length, color: 'var(--accent-400)' },
+                  {
+                    label: `SP (${doneSP}/${totalSP || '?'})`,
+                    value: totalSP > 0 ? `${doneSP}/${totalSP}` : '—',
+                    color: '#facc15',
+                  },
                   { label: 'Impedimentos', value: linkedImpediments.length, color: '#ef4444' },
                   { label: 'Dailys', value: sprintEntries.length, color: 'var(--accent-400)' },
                 ].map(s => (
@@ -1534,6 +1829,9 @@ function SprintDetail({
                 ))}
               </div>
             )}
+
+            {/* Burndown chart */}
+            <BurndownChart sprint={sprint} tasks={tasks} />
 
             {sprint.description && (
               <div

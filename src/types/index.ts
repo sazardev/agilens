@@ -34,6 +34,20 @@ export const KANBAN_STATUS_META: Record<
   done: { label: 'Hecho', color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
 }
 
+// ─── Task priority ────────────────────────────────────────────────────────────
+
+export type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
+
+export const TASK_PRIORITY_META: Record<
+  TaskPriority,
+  { label: string; color: string; bg: string; short: string }
+> = {
+  critical: { label: 'Crítica', short: 'C', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+  high: { label: 'Alta', short: 'A', color: '#f97316', bg: 'rgba(249,115,22,0.12)' },
+  medium: { label: 'Media', short: 'M', color: '#fbbf24', bg: 'rgba(251,191,36,0.12)' },
+  low: { label: 'Baja', short: 'B', color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
+}
+
 export interface Note {
   id: string
   title: string
@@ -51,6 +65,8 @@ export interface Note {
   locked?: boolean // Nota bloqueada — solo lectura
   color?: string // Color de etiqueta visual (hex)
   kanbanStatus?: KanbanStatus // estado para el tablero kanban
+  priority?: TaskPriority // prioridad de la tarea
+  storyPoints?: number // story points de la tarea
 }
 
 // ─── Folders ──────────────────────────────────────────────────────────────────
