@@ -1,9 +1,10 @@
 import { useAppDispatch, useAppSelector } from '@/store'
-import { updateSettings, setGitHubConfig } from '@/store/slices/settingsSlice'
+import { updateSettings } from '@/store/slices/settingsSlice'
 import { useState } from 'react'
 import type { AccentColor, EditorFont, UIDensity, UITheme, MarkdownPreviewFont } from '@/types'
 import AgilensLogo from '@/components/layout/AgilensLogo'
 import OnboardingModal from '@/components/onboarding/OnboardingModal'
+import GitHubConnect from '@/components/github/GitHubConnect'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -138,21 +139,9 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 export default function SettingsPage() {
   const dispatch = useAppDispatch()
   const s = useAppSelector(st => st.settings)
-  const [token, setToken] = useState(s.github?.token ?? '')
-  const [owner, setOwner] = useState(s.github?.owner ?? '')
-  const [repo, setRepo] = useState(s.github?.repo ?? '')
-  const [branch, setBranch] = useState(s.github?.branch ?? 'main')
-  const [tokenVisible, setTokenVisible] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
 
   const set = (patch: Parameters<typeof updateSettings>[0]) => dispatch(updateSettings(patch))
-
-  function saveGitHub() {
-    dispatch(setGitHubConfig({ token, owner, repo, branch }))
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2400)
-  }
 
   const lh = s.lineHeight ?? 1.7
 
@@ -712,66 +701,7 @@ export default function SettingsPage() {
 
           {/* GitHub */}
           <Section title="GitHub">
-            <SettRow
-              label="Personal Access Token"
-              hint="Token con permisos repo. Nunca se envía a servidores externos."
-            >
-              <div style={{ position: 'relative' as const }}>
-                <input
-                  type={tokenVisible ? 'text' : 'password'}
-                  value={token}
-                  placeholder="ghp_xxxxxxxxxxxx"
-                  onChange={e => setToken(e.target.value)}
-                  className="input-base"
-                  style={{ paddingRight: '40px' }}
-                />
-                <button
-                  onClick={() => setTokenVisible(v => !v)}
-                  style={{
-                    position: 'absolute' as const,
-                    right: '10px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--text-3)',
-                    padding: '2px',
-                    lineHeight: 1,
-                    fontSize: '14px',
-                  }}
-                >
-                  {tokenVisible ? '🙈' : '👁'}
-                </button>
-              </div>
-            </SettRow>
-            {(
-              [
-                { label: 'Owner', value: owner, setter: setOwner, ph: 'usuario-github' },
-                { label: 'Repositorio', value: repo, setter: setRepo, ph: 'mi-agilens' },
-                { label: 'Rama', value: branch, setter: setBranch, ph: 'main' },
-              ] as const
-            ).map(({ label, value, setter, ph }) => (
-              <SettRow key={label} label={label}>
-                <input
-                  type="text"
-                  value={value}
-                  placeholder={ph}
-                  onChange={e => (setter as (v: string) => void)(e.target.value)}
-                  className="input-base"
-                />
-              </SettRow>
-            ))}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <button onClick={saveGitHub} className="btn btn-primary">
-                {saved ? '✓ Guardado' : 'Guardar configuración GitHub'}
-              </button>
-              {saved && (
-                <span style={{ fontSize: '12px', color: 'var(--color-success)' }}>
-                  Configuración aplicada
-                </span>
-              )}
-            </div>
+            <GitHubConnect />
           </Section>
 
           {/* About */}

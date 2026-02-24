@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '@/store'
-import { setActiveNoteId, setEditorPreviewMode } from '@/store/slices/uiSlice'
+import { setActiveNoteId, setEditorPreviewMode, toggleFocusMode } from '@/store/slices/uiSlice'
 import {
   updateNote,
   addNote,
   deleteNote,
   addAttachment,
   setNoteFolder,
+  toggleNotePin,
+  toggleNoteLocked,
+  setNoteColor,
 } from '@/store/slices/notesSlice'
 import type { NoteAttachment, NoteType } from '@/types'
 import { NOTE_TYPE_META } from '@/types'
@@ -18,7 +21,13 @@ import MarkdownEditor, {
   type FormatCmd,
 } from '@/components/editor/MarkdownEditor'
 import MarkdownPreview from '@/components/editor/MarkdownPreview'
-import { downloadNoteAsMarkdown, printNote } from '@/lib/export'
+import {
+  downloadNoteAsMarkdown,
+  printNote,
+  downloadNoteAsHtml,
+  copyNoteAsHtml,
+  downloadNotesAsZip,
+} from '@/lib/export'
 import { markdownToHtml } from '@/lib/markdown/processor'
 import { saveAttachmentBlob } from '@/lib/attachmentsDb'
 import { writeAttachmentFile } from '@/lib/git/client'
@@ -210,6 +219,11 @@ export default function EditorPage() {
   const [showBacklinks, setShowBacklinks] = useState(false)
   const [showMeta, setShowMeta] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [copyHtmlDone, setCopyHtmlDone] = useState(false)
+
+  // Focus / zen mode from Redux
+  const focusMode = useAppSelector(s => s.ui.focusMode)
 
   // All tags across every note, deduplicated and sorted
   const allExistingTags = Array.from(new Set(allNotes.flatMap(n => n.tags))).sort()
@@ -334,16 +348,28 @@ export default function EditorPage() {
     dispatch(setNoteFolder({ noteId: note.id, folderId }))
   }
 
-  // ── Close meta/export dropdowns when clicking outside ─────────────────────
+  // ── Close meta/export/color dropdowns when clicking outside ──────────────
   useEffect(() => {
-    if (!showMeta && !showExport) return
+    if (!showMeta && !showExport && !showColorPicker) return
     function handleOutside() {
       setShowMeta(false)
       setShowExport(false)
+      setShowColorPicker(false)
     }
     document.addEventListener('mousedown', handleOutside)
     return () => document.removeEventListener('mousedown', handleOutside)
-  }, [showMeta, showExport])
+  }, [showMeta, showExport, showColorPicker])
+
+  // ── Escape exits focus mode ───────────────────────────────────────────────
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && focusMode) {
+        dispatch(toggleFocusMode())
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [focusMode, dispatch])
 
   // ── Image handling ─────────────────────────────────────────────────────────
   function readFileAsDataURL(file: File): Promise<string> {
@@ -435,11 +461,44 @@ export default function EditorPage() {
     if (files.length > 0) void handleImageFiles(files)
   }
 
-  async function handlePrint() {
+  function handlePrint() {
     if (!note) return
     setShowExport(false)
-    const html = await markdownToHtml(note.content)
-    printNote(note, html)
+
+    // Capture the already-rendered preview DOM — it already has Mermaid SVGs,
+    // Shiki-highlighted code, inline images, etc.
+    const previewEl = document.getElementById('md-print-preview')
+    const capturedHtml = previewEl?.innerHTML ?? ''
+
+    // Snapshot current CSS variables from the active theme/accent
+    const rootCss = getComputedStyle(document.documentElement)
+    const cssVars = (
+      [
+        '--accent-400',
+        '--accent-500',
+        '--accent-600',
+        '--accent-700',
+        '--accent-glow',
+        '--accent-glow-strong',
+        '--font-ui',
+        '--font-mono',
+        '--radius-xs',
+        '--radius-sm',
+        '--radius-md',
+        '--radius-lg',
+        '--radius-xl',
+      ] as const
+    )
+      .map(v => `  ${v}: ${rootCss.getPropertyValue(v).trim() || 'inherit'};`)
+      .join('\n')
+
+    // Open popup synchronously (before any await) so browser doesn't block it
+    const win = window.open('', '_blank')
+    try {
+      printNote(note, capturedHtml, win, cssVars)
+    } catch (err) {
+      console.error('[print]', err)
+    }
   }
 
   function handleDownload() {
@@ -471,6 +530,50 @@ export default function EditorPage() {
     dispatch(deleteNote(note.id))
     dispatch(setActiveNoteId(null))
     navigate('/editor')
+  }
+
+  // ── Pin / lock / color ────────────────────────────────────────────────────
+  function handlePin() {
+    if (!note) return
+    dispatch(toggleNotePin(note.id))
+  }
+
+  function handleLock() {
+    if (!note) return
+    dispatch(toggleNoteLocked(note.id))
+  }
+
+  function handleSetColor(color: string | undefined) {
+    if (!note) return
+    dispatch(setNoteColor({ id: note.id, color }))
+    setShowColorPicker(false)
+  }
+
+  // ── Focus / zen mode ──────────────────────────────────────────────────────
+  function handleToggleFocus() {
+    dispatch(toggleFocusMode())
+  }
+
+  // ── Extended exports ──────────────────────────────────────────────────────
+  async function handleDownloadHtml() {
+    if (!note) return
+    setShowExport(false)
+    const html = await markdownToHtml(note.content)
+    downloadNoteAsHtml(note, html)
+  }
+
+  async function handleDownloadZip() {
+    setShowExport(false)
+    await downloadNotesAsZip(allNotes, 'agilens-notas')
+  }
+
+  async function handleCopyHtml() {
+    if (!note) return
+    setShowExport(false)
+    const html = await markdownToHtml(note.content)
+    await copyNoteAsHtml(html)
+    setCopyHtmlDone(true)
+    setTimeout(() => setCopyHtmlDone(false), 2000)
   }
 
   if (!note) {
@@ -517,11 +620,23 @@ export default function EditorPage() {
 
   const wordCount = note.content.trim().split(/\s+/).filter(Boolean).length
   const charCount = note.content.length
+  const readingMins = Math.max(1, Math.round(wordCount / 200))
 
-  const showFmtBar = mode !== 'preview'
+  // When locked, always show preview-only (no editor)
+  const effectiveMode = note.locked ? 'preview' : mode
+  const showFmtBar = effectiveMode !== 'preview'
 
-  return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+  const editorContent = (
+    <div
+      style={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--bg-1)',
+      }}
+    >
+      {/* ── Color label bar ── */}
+      {note.color && <div style={{ height: '3px', background: note.color, flexShrink: 0 }} />}
       {/* ── Main toolbar ── */}
       <div
         style={{
@@ -725,11 +840,14 @@ export default function EditorPage() {
             flexShrink: 0,
             display: 'flex',
             gap: '8px',
+            alignItems: 'center',
           }}
         >
-          <span>{wordCount}w</span>
+          <span title="Palabras">{wordCount}w</span>
           <span style={{ opacity: 0.5 }}>·</span>
-          <span>{charCount}c</span>
+          <span title="Caracteres">{charCount}c</span>
+          <span style={{ opacity: 0.5 }}>·</span>
+          <span title="Tiempo de lectura estimado">{readingMins} min</span>
         </span>
 
         {/* ── Metadata panel button ── */}
@@ -1167,8 +1285,233 @@ export default function EditorPage() {
           ×
         </button>
 
+        {/* ── Pin · Lock · Color · Focus ── */}
+        {/* Color label */}
+        <div style={{ position: 'relative', flexShrink: 0 }} onMouseDown={e => e.stopPropagation()}>
+          <button
+            title={note.color ? 'Color de nota (activo)' : 'Etiquetar con color'}
+            onClick={() => {
+              setShowColorPicker(v => !v)
+              setShowExport(false)
+              setShowMeta(false)
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '28px',
+              height: '28px',
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              background: showColorPicker ? 'var(--bg-3)' : 'transparent',
+              cursor: 'pointer',
+              transition: 'background var(--transition-fast)',
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="5"
+                fill={note.color ?? 'transparent'}
+                stroke={note.color ? note.color : 'currentColor'}
+              />
+              <path d="M12 2v2M12 20v2M2 12h2M20 12h2" />
+            </svg>
+          </button>
+          {showColorPicker && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '4px',
+                background: 'var(--bg-2)',
+                border: '1px solid var(--border-2)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-md)',
+                zIndex: 50,
+                padding: '8px',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '6px',
+                width: '136px',
+              }}
+            >
+              {[
+                { label: 'Sin color', value: undefined },
+                { label: 'Rojo', value: '#ef4444' },
+                { label: 'Naranja', value: '#f97316' },
+                { label: 'Amarillo', value: '#eab308' },
+                { label: 'Verde', value: '#22c55e' },
+                { label: 'Cian', value: '#06b6d4' },
+                { label: 'Azul', value: '#3b82f6' },
+                { label: 'Violeta', value: '#a855f7' },
+                { label: 'Rosa', value: '#ec4899' },
+              ].map(({ label, value }) => (
+                <button
+                  key={label}
+                  title={label}
+                  onClick={() => handleSetColor(value)}
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    border:
+                      note.color === value
+                        ? '2px solid var(--accent-400)'
+                        : '2px solid var(--border-2)',
+                    background: value ?? 'var(--bg-3)',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    outline: value === undefined ? '1px dashed var(--border-2)' : 'none',
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Pin */}
+        <button
+          title={note.pinned ? 'Desfijar nota' : 'Fijar nota (aparece primero)'}
+          onClick={handlePin}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '28px',
+            height: '28px',
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            background: note.pinned ? 'var(--accent-glow)' : 'transparent',
+            color: note.pinned ? 'var(--accent-400)' : 'var(--text-3)',
+            cursor: 'pointer',
+            transition: 'all var(--transition-fast)',
+            flexShrink: 0,
+          }}
+          onMouseEnter={e => {
+            if (!note.pinned) (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+          }}
+          onMouseLeave={e => {
+            if (!note.pinned) (e.currentTarget as HTMLElement).style.background = 'transparent'
+          }}
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill={note.pinned ? 'currentColor' : 'none'}
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <line x1="12" y1="17" x2="12" y2="22" />
+            <path d="M5 17h14v-1.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V6h1a2 2 0 000-4H8a2 2 0 000 4h1v4.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V17z" />
+          </svg>
+        </button>
+
+        {/* Lock */}
+        <button
+          title={note.locked ? 'Desbloquear nota' : 'Bloquear nota (solo lectura)'}
+          onClick={handleLock}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '28px',
+            height: '28px',
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            background: note.locked ? 'rgba(239,68,68,0.1)' : 'transparent',
+            color: note.locked ? '#ef4444' : 'var(--text-3)',
+            cursor: 'pointer',
+            transition: 'all var(--transition-fast)',
+            flexShrink: 0,
+          }}
+          onMouseEnter={e => {
+            if (!note.locked) (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+          }}
+          onMouseLeave={e => {
+            if (!note.locked) (e.currentTarget as HTMLElement).style.background = 'transparent'
+          }}
+        >
+          {note.locked ? (
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0110 0v4" />
+            </svg>
+          ) : (
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 019.9-1" />
+            </svg>
+          )}
+        </button>
+
+        {/* Focus mode */}
+        <button
+          title={focusMode ? 'Salir del modo zen (Esc)' : 'Modo zen — escritura sin distracciones'}
+          onClick={handleToggleFocus}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '28px',
+            height: '28px',
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            background: focusMode ? 'var(--accent-glow)' : 'transparent',
+            color: focusMode ? 'var(--accent-400)' : 'var(--text-3)',
+            cursor: 'pointer',
+            transition: 'all var(--transition-fast)',
+            flexShrink: 0,
+          }}
+          onMouseEnter={e => {
+            if (!focusMode) (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+          }}
+          onMouseLeave={e => {
+            if (!focusMode) (e.currentTarget as HTMLElement).style.background = 'transparent'
+          }}
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <polyline points="15 3 21 3 21 9" />
+            <polyline points="9 21 3 21 3 15" />
+            <line x1="21" y1="3" x2="14" y2="10" />
+            <line x1="3" y1="21" x2="10" y2="14" />
+          </svg>
+        </button>
+
         {/* Export */}
-        <div style={{ position: 'relative', flexShrink: 0 }}>
+        <div style={{ position: 'relative', flexShrink: 0 }} onMouseDown={e => e.stopPropagation()}>
           <button
             title="Exportar nota"
             onClick={() => setShowExport(v => !v)}
@@ -1211,13 +1554,24 @@ export default function EditorPage() {
                 borderRadius: 'var(--radius-md)',
                 boxShadow: 'var(--shadow-md)',
                 zIndex: 50,
-                minWidth: '160px',
+                minWidth: '200px',
                 overflow: 'hidden',
               }}
             >
               {[
                 { label: 'Descargar .md', action: handleDownload, icon: '↓' },
+                { label: 'Descargar .html', action: () => void handleDownloadHtml(), icon: '⌗' },
                 { label: 'Imprimir / PDF', action: () => void handlePrint(), icon: '⎙' },
+                {
+                  label: copyHtmlDone ? '¡Copiado!' : 'Copiar HTML',
+                  action: () => void handleCopyHtml(),
+                  icon: copyHtmlDone ? '✓' : '⎘',
+                },
+                {
+                  label: `ZIP (${allNotes.length} notas)`,
+                  action: () => void handleDownloadZip(),
+                  icon: '⊞',
+                },
               ].map(item => (
                 <button
                   key={item.label}
@@ -1233,7 +1587,7 @@ export default function EditorPage() {
                     cursor: 'pointer',
                     fontFamily: 'var(--font-ui)',
                     fontSize: '13px',
-                    color: 'var(--text-1)',
+                    color: item.label.startsWith('¡') ? 'var(--accent-400)' : 'var(--text-1)',
                     textAlign: 'left' as const,
                     transition: 'background var(--transition-fast)',
                   }}
@@ -1244,7 +1598,13 @@ export default function EditorPage() {
                     ;(e.currentTarget as HTMLElement).style.background = 'transparent'
                   }}
                 >
-                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-400)' }}>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      color: 'var(--accent-400)',
+                      minWidth: '14px',
+                    }}
+                  >
                     {item.icon}
                   </span>
                   {item.label}
@@ -1414,6 +1774,52 @@ export default function EditorPage() {
         </div>
       )}
 
+      {/* ── Locked notice ── */}
+      {note.locked && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 14px',
+            background: 'rgba(239,68,68,0.08)',
+            borderBottom: '1px solid rgba(239,68,68,0.2)',
+            flexShrink: 0,
+            fontFamily: 'var(--font-ui)',
+            fontSize: '11px',
+            color: '#ef4444',
+          }}
+        >
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0110 0v4" />
+          </svg>
+          Nota bloqueada — solo lectura
+          <button
+            onClick={handleLock}
+            style={{
+              marginLeft: 'auto',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-ui)',
+              fontSize: '11px',
+              color: '#ef4444',
+              padding: '0 4px',
+            }}
+          >
+            Desbloquear
+          </button>
+        </div>
+      )}
+
       {/* ── Panes ── */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', position: 'relative' }}>
         {isDragging && (
@@ -1443,13 +1849,13 @@ export default function EditorPage() {
             </span>
           </div>
         )}
-        {(mode === 'edit' || mode === 'split') && (
+        {(effectiveMode === 'edit' || effectiveMode === 'split') && (
           <div
             style={{
-              width: mode === 'split' ? '50%' : '100%',
+              width: effectiveMode === 'split' ? '50%' : '100%',
               height: '100%',
               overflow: 'hidden',
-              borderRight: mode === 'split' ? '1px solid var(--border-1)' : 'none',
+              borderRight: effectiveMode === 'split' ? '1px solid var(--border-1)' : 'none',
             }}
             onPaste={handleEditorPaste}
             onDragOver={handleDragOver}
@@ -1464,9 +1870,13 @@ export default function EditorPage() {
             />
           </div>
         )}
-        {(mode === 'preview' || mode === 'split') && (
+        {(effectiveMode === 'preview' || effectiveMode === 'split') && (
           <div
-            style={{ width: mode === 'split' ? '50%' : '100%', height: '100%', overflow: 'hidden' }}
+            style={{
+              width: effectiveMode === 'split' ? '50%' : '100%',
+              height: '100%',
+              overflow: 'hidden',
+            }}
           >
             <MarkdownPreview content={note.content} attachments={note.attachments} />
           </div>
@@ -1540,5 +1950,24 @@ export default function EditorPage() {
         </div>
       )}
     </div>
-  )
+  ) // end of editorContent
+
+  if (focusMode) {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 200,
+          background: 'var(--bg-1)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {editorContent}
+      </div>
+    )
+  }
+
+  return editorContent
 }

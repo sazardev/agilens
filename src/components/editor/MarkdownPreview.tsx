@@ -1,11 +1,126 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import rehypeKatex from 'rehype-katex'
+import mermaid from 'mermaid'
+import 'katex/dist/katex.min.css'
 import { useNavigate } from 'react-router-dom'
 import { useAppSelector } from '@/store'
 import CodeBlock from './CodeBlock'
 import type { Components } from 'react-markdown'
 import type { ExtraProps } from 'react-markdown'
 import type { Note, NoteAttachment } from '@/types'
+
+// ─── Mermaid diagram block ────────────────────────────────────────────────────
+// Bump this key whenever mermaid config changes to force re-initialization
+const MERMAID_CONFIG_KEY = 'v3'
+let _mermaidTheme: string | null = null
+function ensureMermaid(isDark: boolean) {
+  const theme = `${isDark ? 'dark' : 'default'}-${MERMAID_CONFIG_KEY}`
+  if (_mermaidTheme === theme) return
+  _mermaidTheme = theme
+  const baseTheme = isDark ? 'dark' : 'default'
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: baseTheme,
+    // htmlLabels MUST be false inside flowchart to fix "Could not find a
+    // suitable point for the given distance" with diamond {} nodes in dagre
+    flowchart: { htmlLabels: false, curve: 'basis' },
+    sequence: { useMaxWidth: false },
+    themeVariables: isDark
+      ? { background: 'transparent', primaryColor: '#7c3aed', primaryTextColor: '#e2e8f0' }
+      : { background: 'transparent' },
+    securityLevel: 'loose',
+    fontFamily: 'system-ui, sans-serif',
+  })
+}
+
+let _mermaidCounter = 0
+
+// Debounce delay: diagram only re-renders after the user stops typing for this long
+const MERMAID_DEBOUNCE_MS = 600
+
+function MermaidBlock({ code, isDark }: { code: string; isDark: boolean }) {
+  const [svg, setSvg] = useState<string>('')
+  const [error, setError] = useState<string>('')
+  // Debounced code — only updates after user pauses typing
+  const [debouncedCode, setDebouncedCode] = useState(code)
+  const renderIdRef = useRef(`mermaid-tmp-${++_mermaidCounter}`)
+
+  // Debounce: update debouncedCode after MERMAID_DEBOUNCE_MS of inactivity
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedCode(code), MERMAID_DEBOUNCE_MS)
+    return () => clearTimeout(t)
+  }, [code])
+
+  useEffect(() => {
+    let cancelled = false
+    ensureMermaid(isDark)
+
+    // Each render call needs a unique ID — reuse causes mermaid to find stale elements
+    const renderId = `mermaid-tmp-${++_mermaidCounter}`
+    renderIdRef.current = renderId
+
+    document.getElementById(renderId)?.remove()
+
+    void mermaid
+      .render(renderId, debouncedCode)
+      .then(({ svg: rendered }) => {
+        if (cancelled) return
+        // Strip mermaid's hardcoded background rect so theme shows through
+        const clean = rendered
+          .replace(/(<rect[^>]*class="background"[^>]*>)/g, '')
+          .replace(/background-color:[^;;"']*(;|")/g, '')
+        setSvg(clean)
+        setError('')
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : String(err))
+      })
+      .finally(() => {
+        document.getElementById(renderId)?.remove()
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [debouncedCode, isDark])
+
+  return (
+    <div
+      style={{
+        textAlign: 'center',
+        margin: '16px 0',
+        overflow: 'auto',
+        padding: '12px',
+        borderRadius: '8px',
+        background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+        border: '1px solid',
+        borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+      }}
+    >
+      {error ? (
+        <pre style={{ color: '#ef4444', fontSize: '12px', textAlign: 'left', margin: 0 }}>
+          {error}
+        </pre>
+      ) : svg ? (
+        // eslint-disable-next-line react/no-danger
+        <div dangerouslySetInnerHTML={{ __html: svg }} />
+      ) : (
+        <span style={{ fontSize: '12px', color: 'var(--text-3)', opacity: 0.5 }}>
+          Renderizando diagrama…
+        </span>
+      )}
+    </div>
+  )
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rehypeKatexPlugin = rehypeKatex as any
 
 // ─── Wiki links preprocessing ────────────────────────────────────────────────
 function preprocessWikiLinks(text: string, notesList: Note[]): string {
@@ -112,6 +227,10 @@ export default function MarkdownPreview({ content, attachments = [] }: Props) {
 
   // ── Code block ────────────────────────────────────────────────────────────
   function Code({ children, className, ...rest }: React.HTMLAttributes<HTMLElement> & ExtraProps) {
+    // Mermaid diagrams
+    if (className === 'language-mermaid') {
+      return <MermaidBlock code={String(children).trim()} isDark={isDark} />
+    }
     if (className?.startsWith('language-')) {
       return (
         <CodeBlock
@@ -277,27 +396,36 @@ export default function MarkdownPreview({ content, attachments = [] }: Props) {
     return <p {...(rest as object)}>{children}</p>
   }
 
-  const components: Components = {
-    h1: makeH(1),
-    h2: makeH(2),
-    h3: makeH(3),
-    h4: makeH(4),
-    h5: makeH(5),
-    h6: makeH(6),
-    code: Code,
-    blockquote: Blockquote,
-    table: Table,
-    th: Th,
-    td: Td,
-    tr: Tr,
-    hr: Hr,
-    a: A,
-    img: Img,
-    p: P,
-  }
+  // Memoize components so ReactMarkdown reuses the same instances between
+  // renders — prevents MermaidBlock from unmounting/remounting on every keystroke
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const components: Components = useMemo<Components>(
+    () => ({
+      h1: makeH(1),
+      h2: makeH(2),
+      h3: makeH(3),
+      h4: makeH(4),
+      h5: makeH(5),
+      h6: makeH(6),
+      code: Code,
+      blockquote: Blockquote,
+      table: Table,
+      th: Th,
+      td: Td,
+      tr: Tr,
+      hr: Hr,
+      a: A,
+      img: Img,
+      p: P,
+      // deps that affect how the above renderers behave
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }),
+    [isDark, showCopy, highlight, showAnchors, navigate, attachments, allNotes]
+  )
 
   return (
     <div
+      id="md-print-preview"
       className="md-preview-root"
       style={{
         height: '100%',
@@ -336,7 +464,8 @@ export default function MarkdownPreview({ content, attachments = [] }: Props) {
       >
         {content.trim() ? (
           <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeKatexPlugin]}
             components={components}
             urlTransform={(url: string) => (url.startsWith('javascript:') ? '' : url)}
           >

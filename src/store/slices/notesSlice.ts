@@ -78,6 +78,21 @@ const notesSlice = createSlice({
         }
       }
     },
+    /** Toggle pinned state — pinned notes float to the top of the list */
+    toggleNotePin(state, action: PayloadAction<string>) {
+      const note = state.notes.find(n => n.id === action.payload)
+      if (note) note.pinned = !note.pinned
+    },
+    /** Toggle locked (read-only) state */
+    toggleNoteLocked(state, action: PayloadAction<string>) {
+      const note = state.notes.find(n => n.id === action.payload)
+      if (note) note.locked = !note.locked
+    },
+    /** Set a highlight color label (hex string) or clear it (undefined) */
+    setNoteColor(state, action: PayloadAction<{ id: string; color: string | undefined }>) {
+      const note = state.notes.find(n => n.id === action.payload.id)
+      if (note) note.color = action.payload.color
+    },
   },
 })
 
@@ -93,6 +108,9 @@ export const {
   bulkSetNoteFolders,
   clearNoteFolders,
   hydrateAttachments,
+  toggleNotePin,
+  toggleNoteLocked,
+  setNoteColor,
 } = notesSlice.actions
 
 export default notesSlice.reducer

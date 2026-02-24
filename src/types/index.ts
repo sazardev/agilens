@@ -34,6 +34,9 @@ export interface Note {
   updatedAt: string // ISO date
   attachments: NoteAttachment[]
   commitHash?: string
+  pinned?: boolean // Nota fijada — aparece primero en la lista
+  locked?: boolean // Nota bloqueada — solo lectura
+  color?: string // Color de etiqueta visual (hex)
 }
 
 // ─── Folders ──────────────────────────────────────────────────────────────────
@@ -221,4 +224,5 @@ export interface UIState {
   notesGroupBy: NotesGroupBy
   notesTypeFilter: string | null
   autoOrganizeMode: AutoOrganizeMode
+  focusMode: boolean // Modo zen — oculta sidebar y toolbars
 }

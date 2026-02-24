@@ -1107,11 +1107,30 @@ export default function GitPage() {
                 : pushStatus === 'success'
                   ? '✓ Push OK'
                   : pushStatus === 'error'
-                    ? '✗ Error'
+                    ? '✗ Error al push'
                     : settings.github
-                      ? '↑ Push a GitHub'
-                      : 'Configura GitHub primero'}
+                      ? `↑ Push · ${settings.github.owner}/${settings.github.repo}`
+                      : '↑ Push a GitHub'}
             </button>
+            {!settings.github && (
+              <button
+                onClick={() => navigate('/settings')}
+                style={{
+                  background: 'transparent',
+                  border: '1px dashed var(--border-2)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--accent-400)',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  width: '100%',
+                  textAlign: 'center',
+                  lineHeight: 1.4,
+                }}
+              >
+                Conecta tu cuenta de GitHub en Ajustes para hacer push →
+              </button>
+            )}
             <div style={{ display: 'flex', gap: '4px' }}>
               <input
                 type="text"

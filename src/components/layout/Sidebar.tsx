@@ -1103,16 +1103,18 @@ export default function Sidebar() {
                         ? notes.filter(n => n.noteType === notesTypeFilter)
                         : notes
 
-                      // Apply search filter
-                      const searched = q
-                        ? typeFiltered.filter(
-                            n =>
-                              n.title.toLowerCase().includes(q) ||
-                              n.content.toLowerCase().includes(q) ||
-                              n.tags.some(t => t.toLowerCase().includes(q)) ||
-                              (n.noteType && n.noteType.toLowerCase().includes(q))
-                          )
-                        : typeFiltered
+                      // Apply search filter, then sort: pinned notes first
+                      const searched = (
+                        q
+                          ? typeFiltered.filter(
+                              n =>
+                                n.title.toLowerCase().includes(q) ||
+                                n.content.toLowerCase().includes(q) ||
+                                n.tags.some(t => t.toLowerCase().includes(q)) ||
+                                (n.noteType && n.noteType.toLowerCase().includes(q))
+                            )
+                          : typeFiltered
+                      ).sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false))
 
                       // Build groups
                       type Group = { key: string; label: string; icon?: string; notes: Note[] }
@@ -1268,8 +1270,12 @@ export default function Sidebar() {
                                         borderLeft: `2px solid ${
                                           isActive
                                             ? 'var(--accent-500)'
-                                            : (typeMeta?.color ?? 'transparent')
+                                            : (n.color ?? typeMeta?.color ?? 'transparent')
                                         }`,
+                                        outline:
+                                          n.pinned && !isActive
+                                            ? '1px solid rgba(251,191,36,0.35)'
+                                            : undefined,
                                       }}
                                     >
                                       {/* Type icon */}
@@ -1292,10 +1298,44 @@ export default function Sidebar() {
                                             overflow: 'hidden',
                                             textOverflow: 'ellipsis',
                                             whiteSpace: 'nowrap',
-                                            fontWeight: isActive ? 600 : 400,
+                                            fontWeight: isActive ? 600 : n.pinned ? 500 : 400,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
                                           }}
                                         >
-                                          {n.title || 'Sin título'}
+                                          <span
+                                            style={{
+                                              overflow: 'hidden',
+                                              textOverflow: 'ellipsis',
+                                              whiteSpace: 'nowrap',
+                                              flex: 1,
+                                            }}
+                                          >
+                                            {n.title || 'Sin título'}
+                                          </span>
+                                          {n.pinned && (
+                                            <svg
+                                              width="9"
+                                              height="9"
+                                              viewBox="0 0 24 24"
+                                              fill="rgba(251,191,36,0.9)"
+                                              style={{ flexShrink: 0 }}
+                                            >
+                                              <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
+                                            </svg>
+                                          )}
+                                          {n.locked && (
+                                            <svg
+                                              width="9"
+                                              height="9"
+                                              viewBox="0 0 24 24"
+                                              fill="rgba(239,68,68,0.8)"
+                                              style={{ flexShrink: 0 }}
+                                            >
+                                              <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
+                                            </svg>
+                                          )}
                                         </div>
                                         {n.tags.length > 0 && (
                                           <div

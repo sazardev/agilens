@@ -12,6 +12,7 @@ export const uiInitialState: UIState = {
   notesGroupBy: 'none',
   notesTypeFilter: null,
   autoOrganizeMode: 'off',
+  focusMode: false,
 }
 
 const uiSlice = createSlice({
@@ -48,6 +49,12 @@ const uiSlice = createSlice({
     setAutoOrganizeMode(state, action: PayloadAction<AutoOrganizeMode>) {
       state.autoOrganizeMode = action.payload
     },
+    toggleFocusMode(state) {
+      state.focusMode = !state.focusMode
+    },
+    setFocusMode(state, action: PayloadAction<boolean>) {
+      state.focusMode = action.payload
+    },
   },
 })
 
@@ -62,6 +69,8 @@ export const {
   setNotesGroupBy,
   setNotesTypeFilter,
   setAutoOrganizeMode,
+  toggleFocusMode,
+  setFocusMode,
 } = uiSlice.actions
 
 export default uiSlice.reducer
