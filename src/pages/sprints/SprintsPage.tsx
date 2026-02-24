@@ -551,7 +551,28 @@ function RetroModal({
             />
           </div>
           <div>
-            <label style={{ ...label, color: '#34d399' }}>✅ ¿Qué salió bien?</label>
+            <label
+              style={{
+                ...label,
+                color: '#34d399',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <svg
+                width="12"
+                height="12"
+                fill="none"
+                stroke="#34d399"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+              ¿Qué salió bien?
+            </label>
             <textarea
               style={ta}
               placeholder="Logros, buenas prácticas, colaboración…"
@@ -560,7 +581,29 @@ function RetroModal({
             />
           </div>
           <div>
-            <label style={{ ...label, color: '#fbbf24' }}>🔧 ¿Qué mejorar?</label>
+            <label
+              style={{
+                ...label,
+                color: '#fbbf24',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <svg
+                width="12"
+                height="12"
+                fill="none"
+                stroke="#fbbf24"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              ¿Qué mejorar?
+            </label>
             <textarea
               style={ta}
               placeholder="Problemas encontrados, deuda técnica, procesos…"
@@ -569,7 +612,32 @@ function RetroModal({
             />
           </div>
           <div>
-            <label style={{ ...label, color: '#60a5fa' }}>📋 Acciones para el próximo sprint</label>
+            <label
+              style={{
+                ...label,
+                color: '#60a5fa',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <svg
+                width="12"
+                height="12"
+                fill="none"
+                stroke="#60a5fa"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <line x1="8" y1="6" x2="21" y2="6" />
+                <line x1="8" y1="12" x2="21" y2="12" />
+                <line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" />
+                <line x1="3" y1="12" x2="3.01" y2="12" />
+                <line x1="3" y1="18" x2="3.01" y2="18" />
+              </svg>
+              Acciones para el próximo sprint
+            </label>
             <textarea
               style={ta}
               placeholder="Acciones concretas, responsables…"
@@ -1714,9 +1782,23 @@ function SprintDetail({
                         fontWeight: 600,
                         color: '#34d399',
                         marginBottom: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
                       }}
                     >
-                      ✅ Qué salió bien
+                      <svg
+                        width="11"
+                        height="11"
+                        fill="none"
+                        stroke="#34d399"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                      </svg>
+                      Qué salió bien
                     </div>
                     <p
                       style={{
@@ -1746,9 +1828,24 @@ function SprintDetail({
                         fontWeight: 600,
                         color: '#fbbf24',
                         marginBottom: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
                       }}
                     >
-                      🔧 A mejorar
+                      <svg
+                        width="11"
+                        height="11"
+                        fill="none"
+                        stroke="#fbbf24"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                      A mejorar
                     </div>
                     <p
                       style={{
@@ -1778,9 +1875,27 @@ function SprintDetail({
                         fontWeight: 600,
                         color: '#60a5fa',
                         marginBottom: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
                       }}
                     >
-                      📋 Acciones
+                      <svg
+                        width="11"
+                        height="11"
+                        fill="none"
+                        stroke="#60a5fa"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                      >
+                        <line x1="8" y1="6" x2="21" y2="6" />
+                        <line x1="8" y1="12" x2="21" y2="12" />
+                        <line x1="8" y1="18" x2="21" y2="18" />
+                        <line x1="3" y1="6" x2="3.01" y2="6" />
+                        <line x1="3" y1="12" x2="3.01" y2="12" />
+                        <line x1="3" y1="18" x2="3.01" y2="18" />
+                      </svg>
+                      Acciones
                     </div>
                     <p
                       style={{

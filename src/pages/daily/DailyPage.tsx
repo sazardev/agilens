@@ -15,7 +15,6 @@ import {
   addSprint,
   setActiveSprint,
   updateSprint,
-  deleteSprint,
 } from '@/store/slices/dailySlice'
 import { addNote } from '@/store/slices/notesSlice'
 import { setActiveNoteId } from '@/store/slices/uiSlice'
@@ -911,41 +910,6 @@ export default function DailyPage() {
                   </span>
                 )}
               </div>
-              {activeSprint && (
-                <button
-                  onClick={() => dispatch(deleteSprint(activeSprint.id))}
-                  aria-label="Eliminar sprint"
-                  title="Eliminar sprint"
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--text-3)',
-                    padding: '4px',
-                    lineHeight: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    borderRadius: 'var(--radius-sm)',
-                    transition: 'color 0.15s',
-                  }}
-                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#ef4444')}
-                  onMouseLeave={e =>
-                    ((e.currentTarget as HTMLElement).style.color = 'var(--text-3)')
-                  }
-                >
-                  <svg
-                    width="12"
-                    height="12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    viewBox="0 0 24 24"
-                  >
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              )}
               {!showSprintForm && (
                 <button
                   className="btn btn-ghost btn-sm"
