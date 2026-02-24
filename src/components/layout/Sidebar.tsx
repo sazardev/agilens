@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppDispatch, useAppSelector } from '@/store'
+import AgilensLogo from '@/components/layout/AgilensLogo'
 import {
   toggleSidebar,
   setSidebarOpen,
@@ -429,25 +430,26 @@ export default function Sidebar() {
           }}
         >
           <AnimatePresence initial={false}>
-            {effectiveOpen && (
-              <motion.span
-                key="logo"
+            {effectiveOpen ? (
+              <motion.div
+                key="logo-open"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.1 }}
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontWeight: 700,
-                  fontSize: '13px',
-                  color: 'var(--accent-400)',
-                  letterSpacing: '-0.02em',
-                  overflow: 'hidden',
-                  whiteSpace: 'nowrap',
-                }}
+                transition={{ duration: 0.12 }}
               >
-                Agilens
-              </motion.span>
+                <AgilensLogo size={24} showWordmark variant="color" />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="logo-icon"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.12 }}
+              >
+                <AgilensLogo size={24} variant="color" />
+              </motion.div>
             )}
           </AnimatePresence>
           <AnimatePresence initial={false}>

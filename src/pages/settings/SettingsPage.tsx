@@ -2,6 +2,8 @@ import { useAppDispatch, useAppSelector } from '@/store'
 import { updateSettings, setGitHubConfig } from '@/store/slices/settingsSlice'
 import { useState } from 'react'
 import type { AccentColor, EditorFont, UIDensity, UITheme, MarkdownPreviewFont } from '@/types'
+import AgilensLogo from '@/components/layout/AgilensLogo'
+import OnboardingModal from '@/components/onboarding/OnboardingModal'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -142,6 +144,7 @@ export default function SettingsPage() {
   const [branch, setBranch] = useState(s.github?.branch ?? 'main')
   const [tokenVisible, setTokenVisible] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   const set = (patch: Parameters<typeof updateSettings>[0]) => dispatch(updateSettings(patch))
 
@@ -154,636 +157,761 @@ export default function SettingsPage() {
   const lh = s.lineHeight ?? 1.7
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--bg-1)' }}>
-      <div
-        style={{
-          maxWidth: '640px',
-          margin: '0 auto',
-          padding: '28px 24px 60px',
-          display: 'flex',
-          flexDirection: 'column' as const,
-          gap: '32px',
-        }}
-      >
-        {/*  Header */}
-        <div>
-          <h1
-            style={{
-              fontSize: '20px',
-              fontWeight: 600,
-              color: 'var(--text-0)',
-              margin: '0 0 4px',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            Ajustes
-          </h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-2)', margin: 0 }}>
-            Personalización de Agilens
-          </p>
-        </div>
+    <>
+      <div style={{ height: '100%', overflowY: 'auto', background: 'var(--bg-1)' }}>
+        <div
+          style={{
+            maxWidth: '640px',
+            margin: '0 auto',
+            padding: '28px 24px 60px',
+            display: 'flex',
+            flexDirection: 'column' as const,
+            gap: '32px',
+          }}
+        >
+          {/*  Header */}
+          <div>
+            <h1
+              style={{
+                fontSize: '20px',
+                fontWeight: 600,
+                color: 'var(--text-0)',
+                margin: '0 0 4px',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              Ajustes
+            </h1>
+            <p style={{ fontSize: '13px', color: 'var(--text-2)', margin: 0 }}>
+              Personalización de Agilens
+            </p>
+          </div>
 
-        {/* Apariencia */}
-        <Section title="Apariencia">
-          {/* Tema claro/oscuro */}
-          <SettRow label="Tema de interfaz" hint="Alterna entre modo claro y oscuro">
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {(['dark', 'light'] as UITheme[]).map(t => (
-                <button
-                  key={t}
-                  onClick={() => set({ uiTheme: t })}
-                  style={{
-                    flex: 1,
-                    padding: '12px 10px',
-                    borderRadius: 'var(--radius-lg)',
-                    border: `1px solid ${s.uiTheme === t ? 'var(--accent-600)' : 'var(--border-2)'}`,
-                    background: s.uiTheme === t ? 'var(--accent-glow)' : 'var(--bg-2)',
-                    cursor: 'pointer',
-                    transition: 'all var(--transition-fast)',
-                    display: 'flex',
-                    flexDirection: 'column' as const,
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}
-                >
-                  {/* Mini preview */}
-                  <div
+          {/* Apariencia */}
+          <Section title="Apariencia">
+            {/* Tema claro/oscuro */}
+            <SettRow label="Tema de interfaz" hint="Alterna entre modo claro y oscuro">
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {(['dark', 'light'] as UITheme[]).map(t => (
+                  <button
+                    key={t}
+                    onClick={() => set({ uiTheme: t })}
                     style={{
-                      width: '100%',
-                      height: '36px',
-                      borderRadius: '4px',
-                      overflow: 'hidden',
-                      background: t === 'dark' ? '#0f0f12' : '#f8f8fc',
-                      border: '1px solid',
-                      borderColor: t === 'dark' ? '#21212a' : '#dcdce8',
+                      flex: 1,
+                      padding: '12px 10px',
+                      borderRadius: 'var(--radius-lg)',
+                      border: `1px solid ${s.uiTheme === t ? 'var(--accent-600)' : 'var(--border-2)'}`,
+                      background: s.uiTheme === t ? 'var(--accent-glow)' : 'var(--bg-2)',
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-fast)',
                       display: 'flex',
+                      flexDirection: 'column' as const,
                       alignItems: 'center',
-                      gap: '4px',
-                      padding: '5px 7px',
+                      gap: '8px',
                     }}
                   >
+                    {/* Mini preview */}
                     <div
                       style={{
-                        width: '28px',
-                        height: '100%',
-                        background: t === 'dark' ? '#16161a' : '#ececf2',
-                        borderRadius: '2px',
+                        width: '100%',
+                        height: '36px',
+                        borderRadius: '4px',
+                        overflow: 'hidden',
+                        background: t === 'dark' ? '#0f0f12' : '#f8f8fc',
+                        border: '1px solid',
+                        borderColor: t === 'dark' ? '#21212a' : '#dcdce8',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '5px 7px',
                       }}
+                    >
+                      <div
+                        style={{
+                          width: '28px',
+                          height: '100%',
+                          background: t === 'dark' ? '#16161a' : '#ececf2',
+                          borderRadius: '2px',
+                        }}
+                      />
+                      <div
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          flexDirection: 'column' as const,
+                          gap: '3px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: '4px',
+                            borderRadius: '2px',
+                            background: t === 'dark' ? '#2c2c36' : '#d0d0de',
+                            width: '70%',
+                          }}
+                        />
+                        <div
+                          style={{
+                            height: '4px',
+                            borderRadius: '2px',
+                            background: t === 'dark' ? '#21212a' : '#dcdce8',
+                            width: '50%',
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        color: s.uiTheme === t ? 'var(--accent-400)' : 'var(--text-1)',
+                      }}
+                    >
+                      {t === 'dark' ? 'Oscuro' : 'Claro'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </SettRow>
+
+            {/* Color de acento */}
+            <SettRow label="Color de acento">
+              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '8px' }}>
+                {ACCENTS.map(a => (
+                  <button
+                    key={a.id}
+                    title={a.label}
+                    onClick={() => set({ accentColor: a.id })}
+                    style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: a.hex,
+                      border: '2px solid transparent',
+                      cursor: 'pointer',
+                      boxShadow:
+                        s.accentColor === a.id
+                          ? `0 0 0 2px var(--bg-1), 0 0 0 4px ${a.hex}`
+                          : 'none',
+                      transition: 'box-shadow var(--transition-fast)',
+                      flexShrink: 0,
+                    }}
+                  />
+                ))}
+                {/* Custom color */}
+                <div style={{ position: 'relative' as const }}>
+                  <button
+                    title="Color personalizado"
+                    onClick={() => set({ accentColor: 'custom' })}
+                    style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: `conic-gradient(red, yellow, lime, cyan, blue, magenta, red)`,
+                      border: '2px solid transparent',
+                      cursor: 'pointer',
+                      boxShadow:
+                        s.accentColor === 'custom'
+                          ? `0 0 0 2px var(--bg-1), 0 0 0 4px ${s.customAccentHex ?? '#6366f1'}`
+                          : 'none',
+                      transition: 'box-shadow var(--transition-fast)',
+                    }}
+                  />
+                </div>
+              </div>
+              {/* Custom hex input */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                <input
+                  type="color"
+                  value={s.customAccentHex ?? '#4f46e5'}
+                  onChange={e => {
+                    set({ accentColor: 'custom', customAccentHex: e.target.value })
+                  }}
+                  style={{
+                    width: '36px',
+                    height: '28px',
+                    padding: '2px',
+                    border: '1px solid var(--border-2)',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--bg-2)',
+                    cursor: 'pointer',
+                  }}
+                />
+                <input
+                  type="text"
+                  value={s.customAccentHex ?? '#4f46e5'}
+                  maxLength={7}
+                  placeholder="#4f46e5"
+                  onChange={e => {
+                    const v = e.target.value
+                    if (/^#[0-9a-f]{6}$/i.test(v))
+                      set({ accentColor: 'custom', customAccentHex: v })
+                    else set({ customAccentHex: v })
+                  }}
+                  style={{
+                    width: '90px',
+                    padding: '5px 9px',
+                    background: 'var(--bg-2)',
+                    border: '1px solid var(--border-2)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-0)',
+                    fontSize: '12px',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                />
+                <span style={{ fontSize: '11px', color: 'var(--text-2)' }}>
+                  Color personalizado
+                </span>
+              </div>
+            </SettRow>
+
+            {/* Densidad */}
+            <SettRow label="Densidad de la UI">
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {DENSITIES.map(d => (
+                  <button
+                    key={d.id}
+                    onClick={() => set({ uiDensity: d.id })}
+                    style={{
+                      flex: 1,
+                      padding: '10px 8px',
+                      borderRadius: 'var(--radius-lg)',
+                      border: `1px solid ${s.uiDensity === d.id ? 'var(--accent-600)' : 'var(--border-2)'}`,
+                      background: s.uiDensity === d.id ? 'var(--accent-glow)' : 'var(--bg-2)',
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-fast)',
+                      textAlign: 'center' as const,
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        color: s.uiDensity === d.id ? 'var(--accent-400)' : 'var(--text-0)',
+                        margin: '0 0 3px',
+                      }}
+                    >
+                      {d.label}
+                    </p>
+                    <p style={{ fontSize: '11px', color: 'var(--text-2)', margin: 0 }}>{d.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </SettRow>
+          </Section>
+
+          {/* Editor */}
+          <Section title="Editor">
+            {/* Fuente del editor */}
+            <SettRow label="Fuente del editor">
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '4px' }}>
+                {FONTS.map(f => (
+                  <label
+                    key={f.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '9px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      background: s.editorFont === f.id ? 'var(--accent-glow)' : 'transparent',
+                      border: `1px solid ${s.editorFont === f.id ? 'var(--accent-600)' : 'transparent'}`,
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-fast)',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="editorFont"
+                      checked={s.editorFont === f.id}
+                      onChange={() => set({ editorFont: f.id })}
+                      style={{ accentColor: 'var(--accent-500)', flexShrink: 0 }}
                     />
                     <div
                       style={{
-                        flex: 1,
                         display: 'flex',
-                        flexDirection: 'column' as const,
-                        gap: '3px',
+                        alignItems: 'baseline',
+                        gap: '12px',
+                        flex: 1,
+                        minWidth: 0,
                       }}
                     >
-                      <div
+                      <span
                         style={{
-                          height: '4px',
-                          borderRadius: '2px',
-                          background: t === 'dark' ? '#2c2c36' : '#d0d0de',
-                          width: '70%',
+                          fontSize: '13px',
+                          fontWeight: 500,
+                          color: s.editorFont === f.id ? 'var(--accent-400)' : 'var(--text-0)',
+                          flexShrink: 0,
                         }}
-                      />
-                      <div
+                      >
+                        {f.label}
+                      </span>
+                      <code
                         style={{
-                          height: '4px',
-                          borderRadius: '2px',
-                          background: t === 'dark' ? '#21212a' : '#dcdce8',
-                          width: '50%',
+                          fontFamily: f.stack,
+                          fontSize: '12px',
+                          color: 'var(--text-2)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap' as const,
                         }}
-                      />
+                      >
+                        {PREVIEW_CODE}
+                      </code>
                     </div>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      color: s.uiTheme === t ? 'var(--accent-400)' : 'var(--text-1)',
-                    }}
-                  >
-                    {t === 'dark' ? 'Oscuro' : 'Claro'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </SettRow>
-
-          {/* Color de acento */}
-          <SettRow label="Color de acento">
-            <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '8px' }}>
-              {ACCENTS.map(a => (
-                <button
-                  key={a.id}
-                  title={a.label}
-                  onClick={() => set({ accentColor: a.id })}
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: 'var(--radius-sm)',
-                    background: a.hex,
-                    border: '2px solid transparent',
-                    cursor: 'pointer',
-                    boxShadow:
-                      s.accentColor === a.id ? `0 0 0 2px var(--bg-1), 0 0 0 4px ${a.hex}` : 'none',
-                    transition: 'box-shadow var(--transition-fast)',
-                    flexShrink: 0,
-                  }}
-                />
-              ))}
-              {/* Custom color */}
-              <div style={{ position: 'relative' as const }}>
-                <button
-                  title="Color personalizado"
-                  onClick={() => set({ accentColor: 'custom' })}
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: 'var(--radius-sm)',
-                    background: `conic-gradient(red, yellow, lime, cyan, blue, magenta, red)`,
-                    border: '2px solid transparent',
-                    cursor: 'pointer',
-                    boxShadow:
-                      s.accentColor === 'custom'
-                        ? `0 0 0 2px var(--bg-1), 0 0 0 4px ${s.customAccentHex ?? '#6366f1'}`
-                        : 'none',
-                    transition: 'box-shadow var(--transition-fast)',
-                  }}
-                />
+                  </label>
+                ))}
               </div>
-            </div>
-            {/* Custom hex input */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-              <input
-                type="color"
-                value={s.customAccentHex ?? '#4f46e5'}
-                onChange={e => {
-                  set({ accentColor: 'custom', customAccentHex: e.target.value })
-                }}
-                style={{
-                  width: '36px',
-                  height: '28px',
-                  padding: '2px',
-                  border: '1px solid var(--border-2)',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'var(--bg-2)',
-                  cursor: 'pointer',
-                }}
-              />
-              <input
-                type="text"
-                value={s.customAccentHex ?? '#4f46e5'}
-                maxLength={7}
-                placeholder="#4f46e5"
-                onChange={e => {
-                  const v = e.target.value
-                  if (/^#[0-9a-f]{6}$/i.test(v)) set({ accentColor: 'custom', customAccentHex: v })
-                  else set({ customAccentHex: v })
-                }}
-                style={{
-                  width: '90px',
-                  padding: '5px 9px',
-                  background: 'var(--bg-2)',
-                  border: '1px solid var(--border-2)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--text-0)',
-                  fontSize: '12px',
-                  fontFamily: 'var(--font-mono)',
-                }}
-              />
-              <span style={{ fontSize: '11px', color: 'var(--text-2)' }}>Color personalizado</span>
-            </div>
-          </SettRow>
+            </SettRow>
 
-          {/* Densidad */}
-          <SettRow label="Densidad de la UI">
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {DENSITIES.map(d => (
-                <button
-                  key={d.id}
-                  onClick={() => set({ uiDensity: d.id })}
+            {/* Tamaño fuente */}
+            <SettRow label={`Tamaño de fuente — ${s.editorFontSize}px`}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <input
+                  type="range"
+                  min={11}
+                  max={22}
+                  value={s.editorFontSize}
+                  onChange={e => set({ editorFontSize: Number(e.target.value) })}
+                  style={{ flex: 1, accentColor: 'var(--accent-500)', cursor: 'pointer' }}
+                />
+                <span
                   style={{
-                    flex: 1,
-                    padding: '10px 8px',
-                    borderRadius: 'var(--radius-lg)',
-                    border: `1px solid ${s.uiDensity === d.id ? 'var(--accent-600)' : 'var(--border-2)'}`,
-                    background: s.uiDensity === d.id ? 'var(--accent-glow)' : 'var(--bg-2)',
-                    cursor: 'pointer',
-                    transition: 'all var(--transition-fast)',
-                    textAlign: 'center' as const,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '12px',
+                    color: 'var(--accent-400)',
+                    width: '34px',
+                    textAlign: 'right' as const,
                   }}
                 >
-                  <p
-                    style={{
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      color: s.uiDensity === d.id ? 'var(--accent-400)' : 'var(--text-0)',
-                      margin: '0 0 3px',
-                    }}
-                  >
-                    {d.label}
-                  </p>
-                  <p style={{ fontSize: '11px', color: 'var(--text-2)', margin: 0 }}>{d.desc}</p>
-                </button>
-              ))}
-            </div>
-          </SettRow>
-        </Section>
+                  {s.editorFontSize}px
+                </span>
+              </div>
+            </SettRow>
 
-        {/* Editor */}
-        <Section title="Editor">
-          {/* Fuente del editor */}
-          <SettRow label="Fuente del editor">
-            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '4px' }}>
-              {FONTS.map(f => (
-                <label
-                  key={f.id}
+            {/* Interlineado */}
+            <SettRow label={`Interlineado — ${lh.toFixed(1)}`}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <input
+                  type="range"
+                  min={1.2}
+                  max={2.4}
+                  step={0.1}
+                  value={lh}
+                  onChange={e => set({ lineHeight: Number(e.target.value) })}
+                  style={{ flex: 1, accentColor: 'var(--accent-500)', cursor: 'pointer' }}
+                />
+                <span
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '9px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    background: s.editorFont === f.id ? 'var(--accent-glow)' : 'transparent',
-                    border: `1px solid ${s.editorFont === f.id ? 'var(--accent-600)' : 'transparent'}`,
-                    cursor: 'pointer',
-                    transition: 'all var(--transition-fast)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '12px',
+                    color: 'var(--accent-400)',
+                    width: '34px',
+                    textAlign: 'right' as const,
                   }}
                 >
-                  <input
-                    type="radio"
-                    name="editorFont"
-                    checked={s.editorFont === f.id}
-                    onChange={() => set({ editorFont: f.id })}
-                    style={{ accentColor: 'var(--accent-500)', flexShrink: 0 }}
-                  />
-                  <div
+                  {lh.toFixed(1)}
+                </span>
+              </div>
+            </SettRow>
+
+            {/* Word wrap */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-0)' }}>
+                  Ajuste de línea
+                </span>
+                <p style={{ fontSize: '11px', color: 'var(--text-2)', margin: '2px 0 0' }}>
+                  Romper líneas largas automáticamente
+                </p>
+              </div>
+              <Toggle checked={s.wordWrap ?? true} onChange={v => set({ wordWrap: v })} />
+            </div>
+          </Section>
+
+          {/* Markdown */}
+          <Section title="Vista previa Markdown">
+            {/* Fuente del prose */}
+            <SettRow
+              label="Fuente de la vista previa"
+              hint="Tipografía usada en el artículo renderizado"
+            >
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {PROSE_FONTS.map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => set({ markdownPreviewFont: f.id })}
                     style={{
-                      display: 'flex',
-                      alignItems: 'baseline',
-                      gap: '12px',
                       flex: 1,
-                      minWidth: 0,
+                      padding: '10px 8px',
+                      borderRadius: 'var(--radius-lg)',
+                      textAlign: 'center' as const,
+                      border: `1px solid ${s.markdownPreviewFont === f.id ? 'var(--accent-600)' : 'var(--border-2)'}`,
+                      background:
+                        s.markdownPreviewFont === f.id ? 'var(--accent-glow)' : 'var(--bg-2)',
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-fast)',
                     }}
                   >
-                    <span
+                    <p
                       style={{
                         fontSize: '13px',
-                        fontWeight: 500,
-                        color: s.editorFont === f.id ? 'var(--accent-400)' : 'var(--text-0)',
-                        flexShrink: 0,
+                        fontWeight: 600,
+                        color:
+                          s.markdownPreviewFont === f.id ? 'var(--accent-400)' : 'var(--text-0)',
+                        margin: '0 0 3px',
                       }}
                     >
                       {f.label}
-                    </span>
-                    <code
+                    </p>
+                    <p
                       style={{
-                        fontFamily: f.stack,
-                        fontSize: '12px',
+                        fontSize: '11px',
                         color: 'var(--text-2)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap' as const,
+                        margin: 0,
+                        fontFamily:
+                          f.id === 'sans'
+                            ? 'var(--font-ui)'
+                            : f.id === 'serif'
+                              ? 'Georgia, serif'
+                              : 'var(--font-mono)',
                       }}
                     >
-                      {PREVIEW_CODE}
-                    </code>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </SettRow>
+                      {f.preview}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </SettRow>
 
-          {/* Tamaño fuente */}
-          <SettRow label={`Tamaño de fuente — ${s.editorFontSize}px`}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <input
-                type="range"
-                min={11}
-                max={22}
-                value={s.editorFontSize}
-                onChange={e => set({ editorFontSize: Number(e.target.value) })}
-                style={{ flex: 1, accentColor: 'var(--accent-500)', cursor: 'pointer' }}
-              />
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '12px',
-                  color: 'var(--accent-400)',
-                  width: '34px',
-                  textAlign: 'right' as const,
-                }}
-              >
-                {s.editorFontSize}px
-              </span>
-            </div>
-          </SettRow>
-
-          {/* Interlineado */}
-          <SettRow label={`Interlineado — ${lh.toFixed(1)}`}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <input
-                type="range"
-                min={1.2}
-                max={2.4}
-                step={0.1}
-                value={lh}
-                onChange={e => set({ lineHeight: Number(e.target.value) })}
-                style={{ flex: 1, accentColor: 'var(--accent-500)', cursor: 'pointer' }}
-              />
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '12px',
-                  color: 'var(--accent-400)',
-                  width: '34px',
-                  textAlign: 'right' as const,
-                }}
-              >
-                {lh.toFixed(1)}
-              </span>
-            </div>
-          </SettRow>
-
-          {/* Word wrap */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-0)' }}>
-                Ajuste de línea
-              </span>
-              <p style={{ fontSize: '11px', color: 'var(--text-2)', margin: '2px 0 0' }}>
-                Romper líneas largas automáticamente
-              </p>
-            </div>
-            <Toggle checked={s.wordWrap ?? true} onChange={v => set({ wordWrap: v })} />
-          </div>
-        </Section>
-
-        {/* Markdown */}
-        <Section title="Vista previa Markdown">
-          {/* Fuente del prose */}
-          <SettRow
-            label="Fuente de la vista previa"
-            hint="Tipografía usada en el artículo renderizado"
-          >
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {PROSE_FONTS.map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => set({ markdownPreviewFont: f.id })}
+            {/* Ancho máximo del prose */}
+            <SettRow
+              label={`Ancho máximo del contenido — ${s.markdownProseWidth ?? 760}px`}
+              hint="Restric d´ ancho para legibilidad óptima"
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <input
+                  type="range"
+                  min={560}
+                  max={1000}
+                  step={20}
+                  value={s.markdownProseWidth ?? 760}
+                  onChange={e => set({ markdownProseWidth: Number(e.target.value) })}
+                  style={{ flex: 1, accentColor: 'var(--accent-500)', cursor: 'pointer' }}
+                />
+                <span
                   style={{
-                    flex: 1,
-                    padding: '10px 8px',
-                    borderRadius: 'var(--radius-lg)',
-                    textAlign: 'center' as const,
-                    border: `1px solid ${s.markdownPreviewFont === f.id ? 'var(--accent-600)' : 'var(--border-2)'}`,
-                    background:
-                      s.markdownPreviewFont === f.id ? 'var(--accent-glow)' : 'var(--bg-2)',
-                    cursor: 'pointer',
-                    transition: 'all var(--transition-fast)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '12px',
+                    color: 'var(--accent-400)',
+                    width: '48px',
+                    textAlign: 'right' as const,
                   }}
                 >
-                  <p
+                  {s.markdownProseWidth ?? 760}px
+                </span>
+              </div>
+            </SettRow>
+
+            {/* Toggles */}
+            {(
+              [
+                {
+                  key: 'markdownShowReadingTime' as const,
+                  label: 'Tiempo de lectura',
+                  hint: 'Muestra estimado de lectura y conteo de palabras',
+                },
+                {
+                  key: 'markdownHeadingAnchors' as const,
+                  label: 'Anclas en encabezados',
+                  hint: 'Botón # visible al pasar el cursor sobre headings',
+                },
+                {
+                  key: 'markdownCopyCode' as const,
+                  label: 'Botón copiar código',
+                  hint: 'Muestra un botón "Copiar" en bloques de código',
+                },
+                {
+                  key: 'markdownCodeHighlight' as const,
+                  label: 'Resaltado de sintaxis',
+                  hint: 'Colorea el código con Shiki (github-dark / github-light)',
+                },
+                {
+                  key: 'markdownSpellcheck' as const,
+                  label: 'Corrector ortográfico',
+                  hint: 'Activa el spellcheck del navegador en el editor',
+                },
+              ] as const
+            ).map(({ key, label, hint }) => (
+              <div
+                key={key}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <div>
+                  <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-0)' }}>
+                    {label}
+                  </span>
+                  <p style={{ fontSize: '11px', color: 'var(--text-2)', margin: '2px 0 0' }}>
+                    {hint}
+                  </p>
+                </div>
+                <Toggle checked={(s[key] as boolean) ?? true} onChange={v => set({ [key]: v })} />
+              </div>
+            ))}
+
+            {/* Tab size */}
+            <SettRow
+              label="Tamaño de tabulación en editor"
+              hint="Caracteres por nivel de indentación"
+            >
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {([2, 4] as const).map(n => (
+                  <button
+                    key={n}
+                    onClick={() => set({ markdownTabSize: n })}
                     style={{
+                      padding: '7px 20px',
+                      borderRadius: 'var(--radius-md)',
+                      border: `1px solid ${(s.markdownTabSize ?? 2) === n ? 'var(--accent-600)' : 'var(--border-2)'}`,
+                      background:
+                        (s.markdownTabSize ?? 2) === n ? 'var(--accent-glow)' : 'var(--bg-2)',
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-fast)',
+                      fontFamily: 'var(--font-mono)',
                       fontSize: '13px',
                       fontWeight: 600,
-                      color: s.markdownPreviewFont === f.id ? 'var(--accent-400)' : 'var(--text-0)',
-                      margin: '0 0 3px',
+                      color: (s.markdownTabSize ?? 2) === n ? 'var(--accent-400)' : 'var(--text-0)',
                     }}
                   >
-                    {f.label}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: '11px',
-                      color: 'var(--text-2)',
-                      margin: 0,
-                      fontFamily:
-                        f.id === 'sans'
-                          ? 'var(--font-ui)'
-                          : f.id === 'serif'
-                            ? 'Georgia, serif'
-                            : 'var(--font-mono)',
-                    }}
-                  >
-                    {f.preview}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </SettRow>
-
-          {/* Ancho máximo del prose */}
-          <SettRow
-            label={`Ancho máximo del contenido — ${s.markdownProseWidth ?? 760}px`}
-            hint="Restric d´ ancho para legibilidad óptima"
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <input
-                type="range"
-                min={560}
-                max={1000}
-                step={20}
-                value={s.markdownProseWidth ?? 760}
-                onChange={e => set({ markdownProseWidth: Number(e.target.value) })}
-                style={{ flex: 1, accentColor: 'var(--accent-500)', cursor: 'pointer' }}
-              />
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '12px',
-                  color: 'var(--accent-400)',
-                  width: '48px',
-                  textAlign: 'right' as const,
-                }}
-              >
-                {s.markdownProseWidth ?? 760}px
-              </span>
-            </div>
-          </SettRow>
-
-          {/* Toggles */}
-          {(
-            [
-              {
-                key: 'markdownShowReadingTime' as const,
-                label: 'Tiempo de lectura',
-                hint: 'Muestra estimado de lectura y conteo de palabras',
-              },
-              {
-                key: 'markdownHeadingAnchors' as const,
-                label: 'Anclas en encabezados',
-                hint: 'Botón # visible al pasar el cursor sobre headings',
-              },
-              {
-                key: 'markdownCopyCode' as const,
-                label: 'Botón copiar código',
-                hint: 'Muestra un botón "Copiar" en bloques de código',
-              },
-              {
-                key: 'markdownCodeHighlight' as const,
-                label: 'Resaltado de sintaxis',
-                hint: 'Colorea el código con Shiki (github-dark / github-light)',
-              },
-              {
-                key: 'markdownSpellcheck' as const,
-                label: 'Corrector ortográfico',
-                hint: 'Activa el spellcheck del navegador en el editor',
-              },
-            ] as const
-          ).map(({ key, label, hint }) => (
-            <div
-              key={key}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-            >
-              <div>
-                <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-0)' }}>
-                  {label}
-                </span>
-                <p style={{ fontSize: '11px', color: 'var(--text-2)', margin: '2px 0 0' }}>
-                  {hint}
-                </p>
+                    {n} espacios
+                  </button>
+                ))}
               </div>
-              <Toggle checked={(s[key] as boolean) ?? true} onChange={v => set({ [key]: v })} />
-            </div>
-          ))}
+            </SettRow>
+          </Section>
 
-          {/* Tab size */}
-          <SettRow
-            label="Tamaño de tabulación en editor"
-            hint="Caracteres por nivel de indentación"
-          >
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {([2, 4] as const).map(n => (
+          {/* Identidad Git */}
+          <Section title="Identidad Git">
+            {(
+              [
+                { label: 'Nombre', key: 'userName', type: 'text', ph: 'Tu Nombre' },
+                { label: 'Email', key: 'userEmail', type: 'email', ph: 'tu@email.com' },
+              ] as const
+            ).map(({ label, key, type, ph }) => (
+              <SettRow key={key} label={label}>
+                <input
+                  type={type}
+                  placeholder={ph}
+                  value={(s[key as keyof typeof s] as string) ?? ''}
+                  onChange={e => dispatch(updateSettings({ [key]: e.target.value }))}
+                  className="input-base"
+                />
+              </SettRow>
+            ))}
+          </Section>
+
+          {/* GitHub */}
+          <Section title="GitHub">
+            <SettRow
+              label="Personal Access Token"
+              hint="Token con permisos repo. Nunca se envía a servidores externos."
+            >
+              <div style={{ position: 'relative' as const }}>
+                <input
+                  type={tokenVisible ? 'text' : 'password'}
+                  value={token}
+                  placeholder="ghp_xxxxxxxxxxxx"
+                  onChange={e => setToken(e.target.value)}
+                  className="input-base"
+                  style={{ paddingRight: '40px' }}
+                />
                 <button
-                  key={n}
-                  onClick={() => set({ markdownTabSize: n })}
+                  onClick={() => setTokenVisible(v => !v)}
                   style={{
-                    padding: '7px 20px',
-                    borderRadius: 'var(--radius-md)',
-                    border: `1px solid ${(s.markdownTabSize ?? 2) === n ? 'var(--accent-600)' : 'var(--border-2)'}`,
-                    background:
-                      (s.markdownTabSize ?? 2) === n ? 'var(--accent-glow)' : 'var(--bg-2)',
+                    position: 'absolute' as const,
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
                     cursor: 'pointer',
-                    transition: 'all var(--transition-fast)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: (s.markdownTabSize ?? 2) === n ? 'var(--accent-400)' : 'var(--text-0)',
+                    color: 'var(--text-3)',
+                    padding: '2px',
+                    lineHeight: 1,
+                    fontSize: '14px',
                   }}
                 >
-                  {n} espacios
+                  {tokenVisible ? '🙈' : '👁'}
                 </button>
-              ))}
-            </div>
-          </SettRow>
-        </Section>
-
-        {/* Identidad Git */}
-        <Section title="Identidad Git">
-          {(
-            [
-              { label: 'Nombre', key: 'userName', type: 'text', ph: 'Tu Nombre' },
-              { label: 'Email', key: 'userEmail', type: 'email', ph: 'tu@email.com' },
-            ] as const
-          ).map(({ label, key, type, ph }) => (
-            <SettRow key={key} label={label}>
-              <input
-                type={type}
-                placeholder={ph}
-                value={(s[key as keyof typeof s] as string) ?? ''}
-                onChange={e => dispatch(updateSettings({ [key]: e.target.value }))}
-                className="input-base"
-              />
+              </div>
             </SettRow>
-          ))}
-        </Section>
+            {(
+              [
+                { label: 'Owner', value: owner, setter: setOwner, ph: 'usuario-github' },
+                { label: 'Repositorio', value: repo, setter: setRepo, ph: 'mi-agilens' },
+                { label: 'Rama', value: branch, setter: setBranch, ph: 'main' },
+              ] as const
+            ).map(({ label, value, setter, ph }) => (
+              <SettRow key={label} label={label}>
+                <input
+                  type="text"
+                  value={value}
+                  placeholder={ph}
+                  onChange={e => (setter as (v: string) => void)(e.target.value)}
+                  className="input-base"
+                />
+              </SettRow>
+            ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button onClick={saveGitHub} className="btn btn-primary">
+                {saved ? '✓ Guardado' : 'Guardar configuración GitHub'}
+              </button>
+              {saved && (
+                <span style={{ fontSize: '12px', color: 'var(--color-success)' }}>
+                  Configuración aplicada
+                </span>
+              )}
+            </div>
+          </Section>
 
-        {/* GitHub */}
-        <Section title="GitHub">
-          <SettRow
-            label="Personal Access Token"
-            hint="Token con permisos repo. Nunca se envía a servidores externos."
-          >
-            <div style={{ position: 'relative' as const }}>
-              <input
-                type={tokenVisible ? 'text' : 'password'}
-                value={token}
-                placeholder="ghp_xxxxxxxxxxxx"
-                onChange={e => setToken(e.target.value)}
-                className="input-base"
-                style={{ paddingRight: '40px' }}
-              />
-              <button
-                onClick={() => setTokenVisible(v => !v)}
+          {/* About */}
+          <Section title="Acerca de">
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px',
+              }}
+            >
+              {/* Brand block */}
+              <div
                 style={{
-                  position: 'absolute' as const,
-                  right: '10px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--text-3)',
-                  padding: '2px',
-                  lineHeight: 1,
-                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px',
+                  padding: '20px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--bg-2)',
+                  border: '1px solid var(--border-1)',
                 }}
               >
-                {tokenVisible ? '🙈' : '👁'}
+                <AgilensLogo size={48} />
+                <div style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 700,
+                      fontSize: '16px',
+                      color: 'var(--accent-400)',
+                      letterSpacing: '-0.03em',
+                      marginBottom: '3px',
+                    }}
+                  >
+                    Agilens
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      color: 'var(--text-3)',
+                      fontFamily: 'var(--font-mono)',
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      marginBottom: '6px',
+                    }}
+                  >
+                    Documenta · Sprinta · Entrega
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '12px',
+                      color: 'var(--text-2)',
+                      fontFamily: 'var(--font-ui)',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Workspace personal de desarrollo ágil: notas, sprints, dailies, impedimentos y
+                    Git integrado.
+                  </div>
+                </div>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '11px',
+                    color: 'var(--text-3)',
+                    background: 'var(--bg-3)',
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    flexShrink: 0,
+                  }}
+                >
+                  v{__APP_VERSION__}
+                </span>
+              </div>
+
+              {/* Badges */}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {[
+                  '100% local',
+                  'Sin cuenta',
+                  'Open source',
+                  'Sin suscripción',
+                  'Markdown nativo',
+                ].map(p => (
+                  <span
+                    key={p}
+                    style={{
+                      padding: '3px 10px',
+                      borderRadius: '999px',
+                      background: 'var(--accent-glow)',
+                      border: '1px solid var(--accent-700)',
+                      color: 'var(--accent-400)',
+                      fontSize: '11px',
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
+                    {p}
+                  </span>
+                ))}
+              </div>
+
+              {/* Relaunch tutorial button */}
+              <button
+                onClick={() => setShowOnboarding(true)}
+                style={{
+                  alignSelf: 'flex-start',
+                  padding: '8px 18px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-2)',
+                  background: 'transparent',
+                  color: 'var(--text-1)',
+                  fontSize: '13px',
+                  fontFamily: 'var(--font-ui)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                Ver tutorial de inicio
               </button>
             </div>
-          </SettRow>
-          {(
-            [
-              { label: 'Owner', value: owner, setter: setOwner, ph: 'usuario-github' },
-              { label: 'Repositorio', value: repo, setter: setRepo, ph: 'mi-agilens' },
-              { label: 'Rama', value: branch, setter: setBranch, ph: 'main' },
-            ] as const
-          ).map(({ label, value, setter, ph }) => (
-            <SettRow key={label} label={label}>
-              <input
-                type="text"
-                value={value}
-                placeholder={ph}
-                onChange={e => (setter as (v: string) => void)(e.target.value)}
-                className="input-base"
-              />
-            </SettRow>
-          ))}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <button onClick={saveGitHub} className="btn btn-primary">
-              {saved ? '✓ Guardado' : 'Guardar configuración GitHub'}
-            </button>
-            {saved && (
-              <span style={{ fontSize: '12px', color: 'var(--color-success)' }}>
-                Configuración aplicada
-              </span>
-            )}
-          </div>
-        </Section>
-
-        {/* About */}
-        <Section title="Acerca de">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-0)' }}>
-                Agilens
-              </span>
-              <p style={{ fontSize: '11px', color: 'var(--text-2)', margin: '2px 0 0' }}>
-                Developer notes para equipos ágiles
-              </p>
-            </div>
-            <span
-              style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-3)' }}
-            >
-              v{__APP_VERSION__}
-            </span>
-          </div>
-        </Section>
+          </Section>
+        </div>
       </div>
-    </div>
+      {showOnboarding && <OnboardingModal onClose={() => setShowOnboarding(false)} />}
+    </>
   )
 }
 

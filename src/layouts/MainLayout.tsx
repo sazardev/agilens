@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import Sidebar from '@/components/layout/Sidebar'
 import StatusBar from '@/components/layout/StatusBar'
 import CommandPalette from '@/components/command/CommandPalette'
+import AgilensLogo from '@/components/layout/AgilensLogo'
 import { useAppDispatch, useAppSelector } from '@/store'
 import { toggleSidebar } from '@/store/slices/uiSlice'
 import { useEffect, useState } from 'react'
@@ -97,17 +98,7 @@ export default function MainLayout() {
           >
             <HamburgerIcon />
           </button>
-          <span
-            style={{
-              fontFamily: 'var(--font-ui)',
-              fontWeight: 700,
-              fontSize: '14px',
-              color: 'var(--accent-400)',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            Agilens
-          </span>
+          <AgilensLogo size={26} showWordmark variant="color" />
         </div>
       )}
 
