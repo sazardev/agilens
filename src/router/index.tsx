@@ -8,6 +8,7 @@ import GitPage from '@/pages/git/GitPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 import ImpedimentsPage from '@/pages/impediments/ImpedimentsPage'
 import SprintsPage from '@/pages/sprints/SprintsPage'
+import KanbanPage from '@/pages/kanban/KanbanPage'
 
 export const router = createBrowserRouter([
   {
@@ -53,6 +54,10 @@ export const router = createBrowserRouter([
       {
         path: 'sprints',
         element: <SprintsPage />,
+      },
+      {
+        path: 'kanban',
+        element: <KanbanPage />,
       },
       {
         path: 'settings',

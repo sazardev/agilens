@@ -95,6 +95,20 @@ const IconSprints = () => (
     <polyline points="6 17 11 12 6 7" />
   </svg>
 )
+const IconKanban = () => (
+  <svg
+    width="16"
+    height="16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    viewBox="0 0 24 24"
+  >
+    <rect x="3" y="3" width="5" height="18" rx="1" />
+    <rect x="10" y="3" width="5" height="12" rx="1" />
+    <rect x="17" y="3" width="5" height="15" rx="1" />
+  </svg>
+)
 const IconImpediments = () => (
   <svg
     width="16"
@@ -176,6 +190,7 @@ const NAV_ITEMS = [
   { to: '/notes-map', label: 'Notas', Icon: IconNotes },
   { to: '/daily', label: 'Daily', Icon: IconDaily },
   { to: '/sprints', label: 'Sprints', Icon: IconSprints },
+  { to: '/kanban', label: 'Kanban', Icon: IconKanban },
   { to: '/impediments', label: 'Bloqueos', Icon: IconImpediments },
   { to: '/git', label: 'Git', Icon: IconGit },
   { to: '/settings', label: 'Ajustes', Icon: IconSettings },
