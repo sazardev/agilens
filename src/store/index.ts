@@ -4,7 +4,7 @@ import notesReducer, { removeAttachment, addNote, bulkSetNoteFolders } from './s
 import dailyReducer from './slices/dailySlice'
 import gitReducer from './slices/gitSlice'
 import settingsReducer, { defaultSettings } from './slices/settingsSlice'
-import uiReducer from './slices/uiSlice'
+import uiReducer, { uiInitialState } from './slices/uiSlice'
 import templatesReducer from './slices/templatesSlice'
 import { BUILTIN_TEMPLATES } from './slices/templatesSlice'
 import foldersReducer, { autoOrganize, buildAutoFolders } from './slices/foldersSlice'
@@ -59,6 +59,7 @@ function loadState() {
       settings?: Record<string, unknown>
       templates?: { templates?: unknown[]; defaultTemplateId?: string }
       impediments?: unknown
+      autoOrganizeMode?: string
     }
     // Merge stored settings with current defaults — ensures new fields are always present
     if (saved.settings) {
@@ -87,7 +88,13 @@ function loadState() {
     // Remove stale partial `ui` key (saved in a previous session) so that
     // uiSlice can use its own initialState (sidebarWidth, sidebarOpen, etc.).
     delete (saved as Record<string, unknown>).ui
-    return saved
+    // Restore only autoOrganizeMode into a full ui object (merges with defaults).
+    const autoOrganizeMode = saved.autoOrganizeMode
+    delete (saved as Record<string, unknown>).autoOrganizeMode
+    return {
+      ...saved,
+      ...(autoOrganizeMode ? { ui: { ...uiInitialState, autoOrganizeMode } } : {}),
+    }
   } catch {
     return undefined
   }
@@ -114,6 +121,7 @@ function saveState(state: ReturnType<typeof store.getState>) {
         templates,
         folders,
         impediments,
+        autoOrganizeMode: state.ui.autoOrganizeMode,
       })
     )
   } catch {

@@ -2,7 +2,7 @@ import { createSlice } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit'
 import type { UIState, NotesGroupBy, AutoOrganizeMode } from '@/types'
 
-const initialState: UIState = {
+export const uiInitialState: UIState = {
   activeView: 'editor',
   sidebarOpen: true,
   sidebarWidth: 240,
@@ -16,7 +16,7 @@ const initialState: UIState = {
 
 const uiSlice = createSlice({
   name: 'ui',
-  initialState,
+  initialState: uiInitialState,
   reducers: {
     setActiveView(state, action: PayloadAction<UIState['activeView']>) {
       state.activeView = action.payload
