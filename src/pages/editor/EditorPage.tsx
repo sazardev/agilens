@@ -31,7 +31,7 @@ import {
 import { markdownToHtml } from '@/lib/markdown/processor'
 import { saveAttachmentBlob } from '@/lib/attachmentsDb'
 import { writeAttachmentFile } from '@/lib/git/client'
-import { GIT_DIR } from '@/store/slices/gitSlice'
+import { GIT_DIR, gitAutoCommit } from '@/store/slices/gitSlice'
 
 const modeLabels = { edit: 'Editor', split: 'Split', preview: 'Preview' } as const
 
@@ -207,11 +207,16 @@ export default function EditorPage() {
   const sprints = useAppSelector(s => s.daily.sprints)
   const folders = useAppSelector(s => s.folders.folders)
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Separate timer for auto-commit (longer debounce: 2s of inactivity)
+  const commitTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editorRef = useRef<MarkdownEditorHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
   // Tracks the live (unsaved) content from CodeMirror — updated synchronously before debounce
   const liveContentRef = useRef<string>(note?.content ?? '')
+  // Auto-save visual state
+  const [pendingSave, setPendingSave] = useState(false)
+  const [autoSaveFlash, setAutoSaveFlash] = useState(false)
   const [tagInput, setTagInput] = useState('')
   const [tagFocused, setTagFocused] = useState(false)
   const [tagSuggIdx, setTagSuggIdx] = useState(-1)
@@ -255,17 +260,44 @@ export default function EditorPage() {
   // uses the correct note's content as a base
   useEffect(() => {
     liveContentRef.current = note?.content ?? ''
+    // Reset pending-save state when switching notes
+    setPendingSave(false)
+    setAutoSaveFlash(false)
+    if (commitTimeout.current) {
+      clearTimeout(commitTimeout.current)
+      commitTimeout.current = null
+    }
   }, [note?.id])
+
+  // Flush any pending commit when the component unmounts
+  useEffect(() => {
+    return () => {
+      if (commitTimeout.current) clearTimeout(commitTimeout.current)
+    }
+  }, [])
 
   const handleChange = useCallback(
     (content: string) => {
       if (!note) return
       liveContentRef.current = content // always track live content synchronously
+      setPendingSave(true)
       if (saveTimeout.current) clearTimeout(saveTimeout.current)
       saveTimeout.current = setTimeout(() => {
         const title = content.match(/^#+ (.+)/m)?.[1] ?? 'Sin título'
         dispatch(updateNote({ id: note.id, content, title }))
       }, 400)
+      // Auto-commit after 2 s of inactivity
+      if (commitTimeout.current) clearTimeout(commitTimeout.current)
+      commitTimeout.current = setTimeout(() => {
+        const latestContent = liveContentRef.current
+        const title = latestContent.match(/^#+ (.+)/m)?.[1] ?? 'Sin título'
+        // Flush latest content before committing
+        dispatch(updateNote({ id: note.id, content: latestContent, title }))
+        dispatch(gitAutoCommit({ noteId: note.id, noteTitle: title, content: latestContent }))
+        setPendingSave(false)
+        setAutoSaveFlash(true)
+        setTimeout(() => setAutoSaveFlash(false), 1800)
+      }, 2000)
     },
     [note, dispatch]
   )
@@ -656,7 +688,7 @@ export default function EditorPage() {
             display: 'flex',
             gap: '4px',
             flex: 1,
-            overflow: 'hidden',
+            overflow: 'visible',
             minWidth: 0,
             flexWrap: 'wrap',
             alignItems: 'center',
@@ -730,7 +762,10 @@ export default function EditorPage() {
             />
 
             {/* Suggestions dropdown */}
-            {tagSuggestions.length > 0 && (
+            {(tagSuggestions.length > 0 ||
+              (tagFocused &&
+                tagInput.trim() &&
+                !allExistingTags.includes(tagInput.trim().toLowerCase()))) && (
               <div
                 style={{
                   position: 'absolute',
@@ -848,6 +883,34 @@ export default function EditorPage() {
           <span title="Caracteres">{charCount}c</span>
           <span style={{ opacity: 0.5 }}>·</span>
           <span title="Tiempo de lectura estimado">{readingMins} min</span>
+          {/* Auto-save indicator */}
+          {(pendingSave || autoSaveFlash) && (
+            <>
+              <span style={{ opacity: 0.4 }}>·</span>
+              <span
+                title={pendingSave ? 'Guardado automático pendiente…' : 'Guardado automáticamente'}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  color: pendingSave ? '#fbbf24' : '#34d399',
+                  transition: 'color 0.3s',
+                }}
+              >
+                <span
+                  style={{
+                    width: '5px',
+                    height: '5px',
+                    borderRadius: '50%',
+                    background: pendingSave ? '#fbbf24' : '#34d399',
+                    display: 'inline-block',
+                    animation: pendingSave ? 'pulse 1.2s infinite' : 'none',
+                  }}
+                />
+                {pendingSave ? 'guardando…' : '✓ guardado'}
+              </span>
+            </>
+          )}
         </span>
 
         {/* ── Metadata panel button ── */}

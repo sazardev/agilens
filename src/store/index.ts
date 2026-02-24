@@ -2,9 +2,9 @@ import { configureStore, createListenerMiddleware } from '@reduxjs/toolkit'
 import { useDispatch, useSelector } from 'react-redux'
 import notesReducer, { removeAttachment, addNote, bulkSetNoteFolders } from './slices/notesSlice'
 import dailyReducer from './slices/dailySlice'
-import gitReducer from './slices/gitSlice'
+import gitReducer, { gitAutoCommit } from './slices/gitSlice'
 import settingsReducer, { defaultSettings } from './slices/settingsSlice'
-import uiReducer, { uiInitialState } from './slices/uiSlice'
+import uiReducer, { uiInitialState, setActiveNoteId } from './slices/uiSlice'
 import templatesReducer from './slices/templatesSlice'
 import { BUILTIN_TEMPLATES } from './slices/templatesSlice'
 import foldersReducer, { autoOrganize, buildAutoFolders } from './slices/foldersSlice'
@@ -42,6 +42,32 @@ listenerMiddleware.startListening({
     )
     api.dispatch(autoOrganize({ notes, sprints, mode: mode as 'type' | 'sprint' | 'both' }))
     api.dispatch(bulkSetNoteFolders(assignments))
+  },
+})
+
+// Auto-commit when a new note is created
+listenerMiddleware.startListening({
+  actionCreator: addNote,
+  effect: (action, api) => {
+    const { id, title, content } = action.payload
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (api.dispatch as any)(gitAutoCommit({ noteId: id, noteTitle: title, content }))
+  },
+})
+
+// Auto-commit the previous note when the user switches to a different note
+listenerMiddleware.startListening({
+  actionCreator: setActiveNoteId,
+  effect: (action, api) => {
+    const prevState = api.getOriginalState() as RootState
+    const prevNoteId = prevState.ui.activeNoteId
+    if (!prevNoteId || prevNoteId === action.payload) return
+    const prevNote = prevState.notes.notes.find(n => n.id === prevNoteId)
+    if (!prevNote) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (api.dispatch as any)(
+      gitAutoCommit({ noteId: prevNoteId, noteTitle: prevNote.title, content: prevNote.content })
+    )
   },
 })
 

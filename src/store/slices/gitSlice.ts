@@ -127,6 +127,37 @@ export const gitDetect = createAsyncThunk('git/detect', async () => {
   }
 })
 
+/**
+ * Silently write + commit a single note file.
+ * Used by auto-commit listeners (note creation, note switch).
+ * No-op when git is not initialized or rootDir is null.
+ */
+export const gitAutoCommit = createAsyncThunk(
+  'git/autoCommit',
+  async (
+    { noteId, noteTitle, content }: { noteId: string; noteTitle: string; content: string },
+    { getState }
+  ) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = getState() as any
+    const initialized: boolean = state.git?.initialized ?? false
+    const rootDir: string | null = state.git?.rootDir ?? null
+    if (!initialized || !rootDir) return null
+
+    const name: string = state.settings?.userName || 'Agilens'
+    const email: string = state.settings?.userEmail || 'notes@agilens.app'
+
+    await gitClient.writeNoteFile(rootDir, noteId, content)
+    try {
+      await gitClient.commitAll(rootDir, `note: ${noteTitle.slice(0, 60)}`, { name, email })
+    } catch {
+      // nothing to commit (content identical to last commit)
+      return null
+    }
+    return await snapshot(rootDir)
+  }
+)
+
 // ─── State ────────────────────────────────────────────────────────────────────
 
 interface GitState {
@@ -139,6 +170,8 @@ interface GitState {
   loading: boolean
   error: string | null
   pushStatus: 'idle' | 'pushing' | 'success' | 'error'
+  /** Unix ms timestamp of the last successful auto-commit — used to trigger HistoryPanel refresh */
+  lastAutoCommitAt: number
 }
 
 const initialState: GitState = {
@@ -151,6 +184,7 @@ const initialState: GitState = {
   loading: false,
   error: null,
   pushStatus: 'idle',
+  lastAutoCommitAt: 0,
 }
 
 // ─── Slice ────────────────────────────────────────────────────────────────────
@@ -267,6 +301,16 @@ const gitSlice = createSlice({
       state.log = a.payload.log
       state.branches = a.payload.branches
       state.currentBranch = a.payload.currentBranch
+    })
+
+    // ── gitAutoCommit ──
+    builder.addCase(gitAutoCommit.fulfilled, (state, a) => {
+      if (!a.payload) return
+      state.log = a.payload.log
+      state.status = a.payload.status
+      state.branches = a.payload.branches
+      state.currentBranch = a.payload.currentBranch
+      state.lastAutoCommitAt = Date.now()
     })
 
     // ── gitDetect ──

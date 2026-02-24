@@ -79,6 +79,21 @@ export async function getLog(dir: string, depth = 30): Promise<GitCommit[]> {
   }))
 }
 
+/** Returns commits that touched a specific note file, newest first. */
+export async function getNoteLog(dir: string, noteId: string): Promise<GitCommit[]> {
+  try {
+    const log = await git.log({ fs, dir, filepath: `notes/${noteId}.md` })
+    return log.map(entry => ({
+      oid: entry.oid,
+      message: entry.commit.message.trim(),
+      author: entry.commit.author.name,
+      timestamp: entry.commit.author.timestamp,
+    }))
+  } catch {
+    return []
+  }
+}
+
 // ─── Branches ──────────────────────────────────────────────────────────────────
 
 export async function getBranches(dir: string): Promise<GitBranch[]> {
