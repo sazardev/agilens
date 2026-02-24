@@ -8,6 +8,7 @@ import uiReducer from './slices/uiSlice'
 import templatesReducer from './slices/templatesSlice'
 import { BUILTIN_TEMPLATES } from './slices/templatesSlice'
 import foldersReducer from './slices/foldersSlice'
+import impedimentsReducer from './slices/impedimentsSlice'
 import { deleteAttachmentBlob } from '@/lib/attachmentsDb'
 
 // ─── Listener middleware (side-effects tied to actions) ────────────────────────
@@ -35,6 +36,7 @@ function loadState() {
       daily?: unknown
       settings?: Record<string, unknown>
       templates?: { templates?: unknown[]; defaultTemplateId?: string }
+      impediments?: unknown
     }
     // Merge stored settings with current defaults — ensures new fields are always present
     if (saved.settings) {
@@ -68,7 +70,7 @@ function loadState() {
 
 function saveState(state: ReturnType<typeof store.getState>) {
   try {
-    const { notes, daily, settings, templates, folders } = state
+    const { notes, daily, settings, templates, folders, impediments } = state
     // Strip dataUrl from attachments before saving to localStorage.
     // Blobs are persisted separately in IndexedDB (see src/lib/attachmentsDb.ts).
     const notesWithoutBlobs = {
@@ -80,7 +82,7 @@ function saveState(state: ReturnType<typeof store.getState>) {
     }
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ notes: notesWithoutBlobs, daily, settings, templates, folders })
+      JSON.stringify({ notes: notesWithoutBlobs, daily, settings, templates, folders, impediments })
     )
   } catch {
     // storage full or unavailable
@@ -98,6 +100,7 @@ export const store = configureStore({
     ui: uiReducer,
     templates: templatesReducer,
     folders: foldersReducer,
+    impediments: impedimentsReducer,
   },
   middleware: getDefaultMiddleware => getDefaultMiddleware().prepend(listenerMiddleware.middleware),
   preloadedState: loadState() as undefined,

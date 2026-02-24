@@ -79,13 +79,42 @@ export interface DailyEntry {
 
 // ─── Sprints ───────────────────────────────────────────────────────────────────
 
+export type SprintStatus = 'planning' | 'active' | 'completed' | 'cancelled'
+
 export interface Sprint {
   id: string
   name: string
   startDate: string
   endDate?: string
   goal?: string
-  velocity?: number // story points planeados
+  status?: SprintStatus // planning | active | completed | cancelled
+  description?: string // descripción extendida
+  storyPoints?: number // puntos planificados
+  completedPoints?: number // puntos completados al cerrar
+  retrospective?: {
+    wentWell?: string
+    toImprove?: string
+    actions?: string
+  }
+}
+
+// ─── Impediments ──────────────────────────────────────────────────────────────
+
+export type ImpedimentStatus = 'open' | 'in-progress' | 'resolved' | 'wont-fix'
+export type ImpedimentSeverity = 'low' | 'medium' | 'high' | 'critical'
+
+export interface Impediment {
+  id: string
+  title: string
+  description?: string
+  status: ImpedimentStatus
+  severity: ImpedimentSeverity
+  sprintId?: string // sprint afectado
+  responsible?: string // persona responsable de resolverlo
+  openedAt: string // YYYY-MM-DD
+  resolvedAt?: string // YYYY-MM-DD
+  notes?: string // notas libres
+  linkedEntryIds?: string[] // daily entries relacionados
 }
 
 // ─── Git ───────────────────────────────────────────────────────────────────────
