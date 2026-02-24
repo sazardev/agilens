@@ -40,6 +40,14 @@ const dailySlice = createSlice({
     setSprints(state, action: PayloadAction<Sprint[]>) {
       state.sprints = action.payload
     },
+    updateSprint(state, action: PayloadAction<Partial<Sprint> & { id: string }>) {
+      const idx = state.sprints.findIndex(s => s.id === action.payload.id)
+      if (idx !== -1) state.sprints[idx] = { ...state.sprints[idx], ...action.payload }
+    },
+    deleteSprint(state, action: PayloadAction<string>) {
+      if (state.activeSprintId === action.payload) state.activeSprintId = null
+      state.sprints = state.sprints.filter(s => s.id !== action.payload)
+    },
   },
 })
 
@@ -51,6 +59,8 @@ export const {
   setActiveSprint,
   setEntries,
   setSprints,
+  updateSprint,
+  deleteSprint,
 } = dailySlice.actions
 
 export default dailySlice.reducer

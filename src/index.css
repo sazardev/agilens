@@ -399,10 +399,6 @@ select {
   border: 1px solid var(--border-1);
   border-radius: var(--radius-lg);
   padding: 16px 18px;
-  transition: border-color var(--transition-fast);
-}
-.card:hover {
-  border-color: var(--border-2);
 }
 .card-elevated {
   background: var(--bg-2);
@@ -495,7 +491,6 @@ select {
 }
 .btn-secondary:hover {
   background: var(--bg-4);
-  border-color: var(--border-3);
 }
 
 .btn-ghost {
@@ -504,7 +499,6 @@ select {
   color: var(--text-1);
 }
 .btn-ghost:hover {
-  border-color: var(--border-3);
   color: var(--text-0);
   background: var(--bg-3);
 }
@@ -525,7 +519,6 @@ select {
 }
 .btn-danger:hover {
   background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.2);
 }
 
 .btn-sm {
@@ -753,7 +746,7 @@ select {
   margin-bottom: 20px;
   padding: 4px 10px;
   border-radius: var(--radius-md);
-  background: rgba(128,128,160,0.08);
+  background: rgba(128, 128, 160, 0.08);
   border: 1px solid var(--border-1);
   color: var(--text-3);
   font-size: 11px;
@@ -784,12 +777,29 @@ select {
   line-height: 1.25;
   position: relative;
 }
-.md-prose h1 { font-size: 1.875em; border-bottom: 2px solid var(--border-2); padding-bottom: 0.35em; }
-.md-prose h2 { font-size: 1.5em;   border-bottom: 1px solid var(--border-1); padding-bottom: 0.25em; }
-.md-prose h3 { font-size: 1.25em; }
-.md-prose h4 { font-size: 1.1em; }
-.md-prose h5, .md-prose h6 { font-size: 1em; }
-.md-prose :is(h1,h2,h3,h4,h5,h6):first-child { margin-top: 0; }
+.md-prose h1 {
+  font-size: 1.875em;
+  border-bottom: 2px solid var(--border-2);
+  padding-bottom: 0.35em;
+}
+.md-prose h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--border-1);
+  padding-bottom: 0.25em;
+}
+.md-prose h3 {
+  font-size: 1.25em;
+}
+.md-prose h4 {
+  font-size: 1.1em;
+}
+.md-prose h5,
+.md-prose h6 {
+  font-size: 1em;
+}
+.md-prose :is(h1, h2, h3, h4, h5, h6):first-child {
+  margin-top: 0;
+}
 
 /* Heading anchors — appear on hover */
 .heading-anchor {
@@ -802,7 +812,7 @@ select {
   margin-left: 0.4em;
   transition: opacity 0.15s;
 }
-.md-prose :is(h1,h2,h3,h4,h5,h6):hover .heading-anchor {
+.md-prose :is(h1, h2, h3, h4, h5, h6):hover .heading-anchor {
   opacity: 1;
 }
 
@@ -811,12 +821,22 @@ select {
   margin: 0.9em 0;
   color: var(--text-0);
 }
-.md-prose p:first-child { margin-top: 0; }
+.md-prose p:first-child {
+  margin-top: 0;
+}
 
 /* Strong / em */
-.md-prose strong { font-weight: 700; color: var(--text-0); }
-.md-prose em     { font-style: italic; }
-.md-prose del    { text-decoration: line-through; color: var(--text-3); }
+.md-prose strong {
+  font-weight: 700;
+  color: var(--text-0);
+}
+.md-prose em {
+  font-style: italic;
+}
+.md-prose del {
+  text-decoration: line-through;
+  color: var(--text-3);
+}
 
 /* Inline code */
 .md-prose code {
@@ -836,13 +856,21 @@ select {
   padding-left: 1.5em;
   margin: 0.85em 0;
 }
-.md-prose li { margin: 0.3em 0; }
-.md-prose ul > li { list-style-type: disc; }
-.md-prose ol > li { list-style-type: decimal; }
-.md-prose li > p { margin: 0.25em 0; }
+.md-prose li {
+  margin: 0.3em 0;
+}
+.md-prose ul > li {
+  list-style-type: disc;
+}
+.md-prose ol > li {
+  list-style-type: decimal;
+}
+.md-prose li > p {
+  margin: 0.25em 0;
+}
 
 /* Task list checkboxes */
-.md-prose input[type="checkbox"] {
+.md-prose input[type='checkbox'] {
   accent-color: var(--accent-500);
   margin-right: 6px;
 }
@@ -855,9 +883,17 @@ select {
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
   font-style: italic;
 }
-.md-blockquote--dark  { background: rgba(99,102,241,0.07); color: var(--text-1); }
-.md-blockquote--light { background: rgba(99,102,241,0.06); color: var(--text-1); }
-.md-blockquote p { margin: 0.25em 0 !important; }
+.md-blockquote--dark {
+  background: rgba(99, 102, 241, 0.07);
+  color: var(--text-1);
+}
+.md-blockquote--light {
+  background: rgba(99, 102, 241, 0.06);
+  color: var(--text-1);
+}
+.md-blockquote p {
+  margin: 0.25em 0 !important;
+}
 
 /* Horizontal rule */
 .md-hr {
@@ -871,8 +907,10 @@ select {
   color: var(--accent-400) !important;
   text-decoration: underline;
   text-underline-offset: 3px;
-  text-decoration-color: rgba(99,102,241,0.4);
-  transition: text-decoration-color 0.15s, color 0.15s;
+  text-decoration-color: rgba(99, 102, 241, 0.4);
+  transition:
+    text-decoration-color 0.15s,
+    color 0.15s;
 }
 .md-link:hover {
   color: var(--accent-300) !important;
@@ -978,23 +1016,39 @@ select {
 }
 
 /* When there's no lang label, less top padding */
-.shiki-block pre { padding-top: 14px !important; }
+.shiki-block pre {
+  padding-top: 14px !important;
+}
 .code-block-wrapper[data-lang] pre,
 div[data-lang] pre {
   padding-top: 34px !important;
 }
 
 /* Shiki line */
-.shiki-block .line { display: inline-block; min-width: 100%; }
-.shiki-block code { background: transparent !important; border: none !important; padding: 0 !important; font-size: inherit; color: inherit; white-space: pre; }
+.shiki-block .line {
+  display: inline-block;
+  min-width: 100%;
+}
+.shiki-block code {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  font-size: inherit;
+  color: inherit;
+  white-space: pre;
+}
 
 /* Light shiki bg */
 .shiki-light pre,
-.shiki-light .shiki { background: #f6f8fa !important; }
+.shiki-light .shiki {
+  background: #f6f8fa !important;
+}
 
 /* Dark shiki bg */
 .shiki-dark pre,
-.shiki-dark .shiki { background: #0d1117 !important; }
+.shiki-dark .shiki {
+  background: #0d1117 !important;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    EDITOR TOOLBAR — Format bar
@@ -1007,5 +1061,9 @@ div[data-lang] pre {
 }
 
 /* Spellcheck prop passthrough to CodeMirror */
-[data-spellcheck='true'] .cm-content { spellcheck: true; }
-[data-spellcheck='false'] .cm-content { spellcheck: false; }
+[data-spellcheck='true'] .cm-content {
+  spellcheck: true;
+}
+[data-spellcheck='false'] .cm-content {
+  spellcheck: false;
+}

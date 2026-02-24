@@ -569,12 +569,10 @@ export default function Sidebar() {
                   onMouseEnter={e => {
                     const el = e.currentTarget as HTMLElement
                     el.style.background = 'var(--accent-glow)'
-                    el.style.borderColor = 'var(--accent-400)'
                   }}
                   onMouseLeave={e => {
                     const el = e.currentTarget as HTMLElement
                     el.style.background = 'transparent'
-                    el.style.borderColor = 'var(--accent-600)'
                   }}
                 >
                   <IconTemplates />

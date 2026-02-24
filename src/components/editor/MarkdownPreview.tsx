@@ -238,20 +238,43 @@ export default function MarkdownPreview({ content, attachments = [] }: Props) {
   }
 
   // ── Image ─────────────────────────────────────────────────────────────────
-  function Img({ src, alt, ...rest }: React.ImgHTMLAttributes<HTMLImageElement> & ExtraProps) {
+  function Img({
+    src,
+    alt,
+    node,
+    ...rest
+  }: React.ImgHTMLAttributes<HTMLImageElement> & ExtraProps) {
+    // react-markdown strips non-http URLs via urlTransform — read original src from hast node
+    const rawSrc: string = (node?.properties?.src as string | undefined) ?? src ?? ''
     // Resolve attachment:ID references to local data URLs
-    let resolvedSrc = src
-    if (src?.startsWith('attachment:')) {
-      const id = src.slice('attachment:'.length)
+    let resolvedSrc = rawSrc
+    if (rawSrc.startsWith('attachment:')) {
+      const id = rawSrc.slice('attachment:'.length)
       const found = attachments.find(a => a.id === id)
-      resolvedSrc = found?.dataUrl ?? src
+      resolvedSrc = found?.dataUrl ?? ''
     }
+    if (!resolvedSrc) return null
     return (
       <figure className="md-figure">
         <img src={resolvedSrc} alt={alt} className="md-img" {...(rest as object)} />
         {alt && <figcaption className="md-figcaption">{alt}</figcaption>}
       </figure>
     )
+  }
+
+  // ── Paragraph (avoid invalid nesting when paragraph wraps an image) ────────
+  function P({ children, node, ...rest }: React.HTMLAttributes<HTMLParagraphElement> & ExtraProps) {
+    const hasImg = node?.children?.some(
+      (c: { type: string; tagName?: string }) => c.type === 'element' && c.tagName === 'img'
+    )
+    if (hasImg) {
+      return (
+        <div className="md-img-para" {...(rest as object)}>
+          {children}
+        </div>
+      )
+    }
+    return <p {...(rest as object)}>{children}</p>
   }
 
   const components: Components = {
@@ -270,6 +293,7 @@ export default function MarkdownPreview({ content, attachments = [] }: Props) {
     hr: Hr,
     a: A,
     img: Img,
+    p: P,
   }
 
   return (
@@ -311,7 +335,11 @@ export default function MarkdownPreview({ content, attachments = [] }: Props) {
         }}
       >
         {content.trim() ? (
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={components}
+            urlTransform={(url: string) => (url.startsWith('javascript:') ? '' : url)}
+          >
             {preprocessWikiLinks(content, allNotes)}
           </ReactMarkdown>
         ) : (

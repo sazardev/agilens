@@ -66,6 +66,18 @@ const notesSlice = createSlice({
         n.folderId = undefined
       })
     },
+    /**
+     * Restore attachment dataUrls from IndexedDB after page load.
+     * Payload: id → dataUrl map for every persisted blob.
+     */
+    hydrateAttachments(state, action: PayloadAction<Record<string, string>>) {
+      const blobs = action.payload
+      for (const note of state.notes) {
+        for (const att of note.attachments) {
+          if (blobs[att.id]) att.dataUrl = blobs[att.id]
+        }
+      }
+    },
   },
 })
 
@@ -80,6 +92,7 @@ export const {
   setNoteFolder,
   bulkSetNoteFolders,
   clearNoteFolders,
+  hydrateAttachments,
 } = notesSlice.actions
 
 export default notesSlice.reducer

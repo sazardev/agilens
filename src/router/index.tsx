@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import MainLayout from '@/layouts/MainLayout'
 import EditorPage from '@/pages/editor/EditorPage'
 import DailyPage from '@/pages/daily/DailyPage'
+import DailyHistoryPage from '@/pages/daily/DailyHistoryPage'
 import GitPage from '@/pages/git/GitPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 
@@ -25,6 +26,10 @@ export const router = createBrowserRouter([
       {
         path: 'daily',
         element: <DailyPage />,
+      },
+      {
+        path: 'daily/history',
+        element: <DailyHistoryPage />,
       },
       {
         path: 'daily/:date',

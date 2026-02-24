@@ -1,6 +1,6 @@
-import { configureStore } from '@reduxjs/toolkit'
+import { configureStore, createListenerMiddleware } from '@reduxjs/toolkit'
 import { useDispatch, useSelector } from 'react-redux'
-import notesReducer from './slices/notesSlice'
+import notesReducer, { removeAttachment } from './slices/notesSlice'
 import dailyReducer from './slices/dailySlice'
 import gitReducer from './slices/gitSlice'
 import settingsReducer, { defaultSettings } from './slices/settingsSlice'
@@ -8,6 +8,19 @@ import uiReducer from './slices/uiSlice'
 import templatesReducer from './slices/templatesSlice'
 import { BUILTIN_TEMPLATES } from './slices/templatesSlice'
 import foldersReducer from './slices/foldersSlice'
+import { deleteAttachmentBlob } from '@/lib/attachmentsDb'
+
+// ─── Listener middleware (side-effects tied to actions) ────────────────────────
+
+const listenerMiddleware = createListenerMiddleware()
+
+// Clean up IndexedDB blob whenever an attachment is removed
+listenerMiddleware.startListening({
+  actionCreator: removeAttachment,
+  effect: async action => {
+    void deleteAttachmentBlob(action.payload.attachmentId)
+  },
+})
 
 // ─── Persistence helpers ───────────────────────────────────────────────────────
 
@@ -56,9 +69,18 @@ function loadState() {
 function saveState(state: ReturnType<typeof store.getState>) {
   try {
     const { notes, daily, settings, templates, folders } = state
+    // Strip dataUrl from attachments before saving to localStorage.
+    // Blobs are persisted separately in IndexedDB (see src/lib/attachmentsDb.ts).
+    const notesWithoutBlobs = {
+      ...notes,
+      notes: notes.notes.map(n => ({
+        ...n,
+        attachments: n.attachments.map(({ dataUrl: _dataUrl, ...rest }) => rest),
+      })),
+    }
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ notes, daily, settings, templates, folders })
+      JSON.stringify({ notes: notesWithoutBlobs, daily, settings, templates, folders })
     )
   } catch {
     // storage full or unavailable
@@ -77,6 +99,7 @@ export const store = configureStore({
     templates: templatesReducer,
     folders: foldersReducer,
   },
+  middleware: getDefaultMiddleware => getDefaultMiddleware().prepend(listenerMiddleware.middleware),
   preloadedState: loadState() as undefined,
 })
 

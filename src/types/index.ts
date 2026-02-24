@@ -55,7 +55,8 @@ export interface NoteAttachment {
   id: string
   name: string
   type: 'image' | 'video' | 'file'
-  dataUrl: string // base64 or blob URL
+  /** base64 dataUrl — stored in IndexedDB, not in localStorage */
+  dataUrl?: string
   size: number
 }
 
@@ -68,7 +69,12 @@ export interface DailyEntry {
   did: string[] // Hice
   will: string[] // Haré
   blocked: string[] // Bloqueos
+  highlights?: string[] // Logros destacados
   noteIds: string[] // Referencias a notas del día
+  projectNoteIds?: string[] // Notas vinculadas como proyectos
+  generalNotes?: string // Notas libres
+  mood?: number // 1-5
+  energy?: number // 1-5
 }
 
 // ─── Sprints ───────────────────────────────────────────────────────────────────
@@ -79,6 +85,7 @@ export interface Sprint {
   startDate: string
   endDate?: string
   goal?: string
+  velocity?: number // story points planeados
 }
 
 // ─── Git ───────────────────────────────────────────────────────────────────────

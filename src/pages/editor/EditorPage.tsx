@@ -20,6 +20,9 @@ import MarkdownEditor, {
 import MarkdownPreview from '@/components/editor/MarkdownPreview'
 import { downloadNoteAsMarkdown, printNote } from '@/lib/export'
 import { markdownToHtml } from '@/lib/markdown/processor'
+import { saveAttachmentBlob } from '@/lib/attachmentsDb'
+import { writeAttachmentFile } from '@/lib/git/client'
+import { GIT_DIR } from '@/store/slices/gitSlice'
 
 const modeLabels = { edit: 'Editor', split: 'Split', preview: 'Preview' } as const
 
@@ -368,6 +371,12 @@ export default function EditorPage() {
         size: file.size,
       }
       dispatch(addAttachment({ noteId: note.id, attachment }))
+      // Persist blob to IndexedDB (survives refresh; not subject to localStorage limits)
+      void saveAttachmentBlob(id, dataUrl)
+      // Also write to LightningFS so git can track the file
+      void writeAttachmentFile(GIT_DIR, note.id, id, file.name, dataUrl).catch(() => {
+        // LightningFS not available yet (git not initialized) — file will be added on next commit
+      })
       const alt = file.name.replace(/\.[^.]+$/, '')
       const markdown = `![${alt}](attachment:${id})\n`
       if (editorRef.current) {

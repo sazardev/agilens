@@ -131,3 +131,111 @@ export async function writeNoteFile(dir: string, noteId: string, content: string
   await ensureDir(notesDir)
   await pfs.writeFile(`${notesDir}/${noteId}.md`, content, 'utf8')
 }
+
+// ─── Diff utilities ────────────────────────────────────────────────────────────
+
+/** Returns the text content of a file at a specific commit. Returns '' if absent. */
+export async function getFileContentAtCommit(
+  dir: string,
+  commitOid: string,
+  filepath: string
+): Promise<string> {
+  try {
+    const { blob } = await git.readBlob({ fs, dir, oid: commitOid, filepath })
+    return new TextDecoder().decode(blob)
+  } catch {
+    return ''
+  }
+}
+
+export interface CommitFileChange {
+  path: string
+  status: 'added' | 'modified' | 'deleted'
+}
+
+/**
+ * Returns the list of files that changed between a commit and its parent.
+ * For the initial commit returns all files as 'added'.
+ */
+export async function getChangedFilesInCommit(
+  dir: string,
+  commitOid: string
+): Promise<CommitFileChange[]> {
+  const { commit } = await git.readCommit({ fs, dir, oid: commitOid })
+  const parentOid = commit.parent[0] ?? null
+
+  if (!parentOid) {
+    // Initial commit — everything is new
+    const files = await git.listFiles({ fs, dir, ref: commitOid })
+    return files.map(path => ({ path, status: 'added' as const }))
+  }
+
+  const results: CommitFileChange[] = []
+
+  await git.walk({
+    fs,
+    dir,
+    trees: [git.TREE({ ref: commitOid }), git.TREE({ ref: parentOid })],
+    map: async (filepath, [head, base]) => {
+      if (filepath === '.') return null
+      const [headType, baseType] = await Promise.all([head?.type(), base?.type()])
+      if (headType !== 'blob' && baseType !== 'blob') return null
+      const [headOid, baseOid] = await Promise.all([head?.oid(), base?.oid()])
+      if (!baseOid && headOid) results.push({ path: filepath, status: 'added' })
+      else if (baseOid && !headOid) results.push({ path: filepath, status: 'deleted' })
+      else if (headOid !== baseOid) results.push({ path: filepath, status: 'modified' })
+      return null
+    },
+  })
+
+  return results
+}
+
+/** Returns the parent commit OID for a given commit (null if initial commit). */
+export async function getParentCommitOid(dir: string, commitOid: string): Promise<string | null> {
+  const { commit } = await git.readCommit({ fs, dir, oid: commitOid })
+  return commit.parent[0] ?? null
+}
+
+// ─── Write attachment ─────────────────────────────────────────────────────────
+
+/**
+ * Persist an attachment file in the virtual FS so it's tracked by git.
+ * The dataUrl is converted to a binary Uint8Array before writing.
+ * Path: {dir}/attachments/{noteId}/{attachmentId}-{filename}
+ */
+export async function writeAttachmentFile(
+  dir: string,
+  noteId: string,
+  attachmentId: string,
+  filename: string,
+  dataUrl: string
+): Promise<string> {
+  const attachDir = `${dir}/attachments`
+  const noteAttachDir = `${attachDir}/${noteId}`
+  await ensureDir(attachDir)
+  await ensureDir(noteAttachDir)
+  // Convert dataUrl → Uint8Array
+  const base64 = dataUrl.split(',')[1]
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  const filePath = `${noteAttachDir}/${attachmentId}-${filename}`
+  await pfs.writeFile(filePath, bytes)
+  return filePath
+}
+
+/** Delete an attachment file from the virtual FS */
+export async function deleteAttachmentFile(
+  dir: string,
+  noteId: string,
+  attachmentId: string,
+  filename: string
+): Promise<void> {
+  const filePath = `${dir}/attachments/${noteId}/${attachmentId}-${filename}`
+  try {
+    await pfs.unlink(filePath)
+  } catch {
+    // file may not exist yet (e.g. if git was initialized after attach)
+  }
+}
