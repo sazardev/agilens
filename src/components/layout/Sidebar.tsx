@@ -901,6 +901,73 @@ export default function Sidebar() {
                 minHeight: 0,
               }}
             >
+              {/* Auto-organize mode selector — always visible */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '2px',
+                  padding: '4px 8px',
+                  borderBottom: '1px solid var(--border-1)',
+                  flexShrink: 0,
+                  background: autoOrganizeMode !== 'off' ? 'var(--accent-glow)' : 'transparent',
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '9px',
+                    color: autoOrganizeMode !== 'off' ? 'var(--accent-400)' : 'var(--text-3)',
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    paddingRight: '4px',
+                    flexShrink: 0,
+                    fontWeight: autoOrganizeMode !== 'off' ? 700 : 400,
+                  }}
+                >
+                  Auto
+                </span>
+                {[
+                  { value: 'off' as AutoOrganizeMode, label: '—', title: 'Sin auto-organizar' },
+                  {
+                    value: 'type' as AutoOrganizeMode,
+                    label: 'tipo',
+                    title: 'Organizar por tipo automáticamente',
+                  },
+                  {
+                    value: 'sprint' as AutoOrganizeMode,
+                    label: 'sprint',
+                    title: 'Organizar por sprint automáticamente',
+                  },
+                  {
+                    value: 'both' as AutoOrganizeMode,
+                    label: 'ambos',
+                    title: 'Organizar por tipo y sprint',
+                  },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => handleSetAutoOrganize(opt.value)}
+                    title={opt.title}
+                    style={{
+                      padding: '3px 7px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: 'none',
+                      background:
+                        autoOrganizeMode === opt.value ? 'var(--accent-500)' : 'transparent',
+                      color: autoOrganizeMode === opt.value ? '#fff' : 'var(--text-3)',
+                      fontSize: '10px',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: autoOrganizeMode === opt.value ? 600 : 400,
+                      transition: 'all 0.1s',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
               {/* Tab switcher: Lista | Carpetas */}
               <div
                 style={{
@@ -985,71 +1052,6 @@ export default function Sidebar() {
                         }}
                       >
                         <opt.Icon />
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Auto-organize mode selector */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '2px',
-                      padding: '3px 8px',
-                      borderBottom: '1px solid var(--border-1)',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '9px',
-                        color: 'var(--text-3)',
-                        letterSpacing: '0.06em',
-                        textTransform: 'uppercase',
-                        paddingRight: '4px',
-                        flexShrink: 0,
-                      }}
-                    >
-                      Auto
-                    </span>
-                    {[
-                      { value: 'off' as AutoOrganizeMode, label: '—', title: 'Sin auto-organizar' },
-                      {
-                        value: 'type' as AutoOrganizeMode,
-                        label: 'tipo',
-                        title: 'Organizar por tipo automáticamente',
-                      },
-                      {
-                        value: 'sprint' as AutoOrganizeMode,
-                        label: 'sprint',
-                        title: 'Organizar por sprint automáticamente',
-                      },
-                      {
-                        value: 'both' as AutoOrganizeMode,
-                        label: 'ambos',
-                        title: 'Organizar por tipo y sprint',
-                      },
-                    ].map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => handleSetAutoOrganize(opt.value)}
-                        title={opt.title}
-                        style={{
-                          padding: '3px 7px',
-                          borderRadius: 'var(--radius-sm)',
-                          border: 'none',
-                          background:
-                            autoOrganizeMode === opt.value ? 'var(--accent-glow)' : 'transparent',
-                          color:
-                            autoOrganizeMode === opt.value ? 'var(--accent-400)' : 'var(--text-3)',
-                          fontSize: '10px',
-                          cursor: 'pointer',
-                          fontFamily: 'var(--font-mono)',
-                          transition: 'all 0.1s',
-                        }}
-                      >
-                        {opt.label}
                       </button>
                     ))}
                   </div>
