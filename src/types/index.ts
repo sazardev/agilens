@@ -207,6 +207,10 @@ export interface AppSettings {
 
 export type AppView = 'editor' | 'daily' | 'git' | 'settings'
 
+export type NotesGroupBy = 'none' | 'type' | 'tag' | 'sprint' | 'alpha'
+
+export type AutoOrganizeMode = 'off' | 'type' | 'sprint' | 'both'
+
 export interface UIState {
   activeView: AppView
   sidebarOpen: boolean
@@ -214,4 +218,7 @@ export interface UIState {
   sidebarAutoHide: boolean
   activeNoteId: string | null
   editorPreviewMode: 'edit' | 'split' | 'preview'
+  notesGroupBy: NotesGroupBy
+  notesTypeFilter: string | null
+  autoOrganizeMode: AutoOrganizeMode
 }

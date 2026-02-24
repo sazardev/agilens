@@ -1,6 +1,6 @@
 import { createSlice } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit'
-import type { UIState } from '@/types'
+import type { UIState, NotesGroupBy, AutoOrganizeMode } from '@/types'
 
 const initialState: UIState = {
   activeView: 'editor',
@@ -9,6 +9,9 @@ const initialState: UIState = {
   sidebarAutoHide: false,
   activeNoteId: null,
   editorPreviewMode: 'split',
+  notesGroupBy: 'none',
+  notesTypeFilter: null,
+  autoOrganizeMode: 'off',
 }
 
 const uiSlice = createSlice({
@@ -36,6 +39,15 @@ const uiSlice = createSlice({
     setSidebarAutoHide(state, action: PayloadAction<boolean>) {
       state.sidebarAutoHide = action.payload
     },
+    setNotesGroupBy(state, action: PayloadAction<NotesGroupBy>) {
+      state.notesGroupBy = action.payload
+    },
+    setNotesTypeFilter(state, action: PayloadAction<string | null>) {
+      state.notesTypeFilter = action.payload
+    },
+    setAutoOrganizeMode(state, action: PayloadAction<AutoOrganizeMode>) {
+      state.autoOrganizeMode = action.payload
+    },
   },
 })
 
@@ -47,6 +59,9 @@ export const {
   setEditorPreviewMode,
   setSidebarWidth,
   setSidebarAutoHide,
+  setNotesGroupBy,
+  setNotesTypeFilter,
+  setAutoOrganizeMode,
 } = uiSlice.actions
 
 export default uiSlice.reducer

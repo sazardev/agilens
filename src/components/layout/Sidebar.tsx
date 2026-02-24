@@ -7,17 +7,20 @@ import {
   setSidebarOpen,
   setSidebarWidth,
   setSidebarAutoHide,
+  setNotesGroupBy,
+  setNotesTypeFilter,
+  setAutoOrganizeMode,
 } from '@/store/slices/uiSlice'
-import { addNote, deleteNote } from '@/store/slices/notesSlice'
+import { addNote, deleteNote, bulkSetNoteFolders } from '@/store/slices/notesSlice'
 import { setActiveNoteId } from '@/store/slices/uiSlice'
-import type { Note, NoteType } from '@/types'
+import type { Note, NoteType, NotesGroupBy, AutoOrganizeMode } from '@/types'
 import { NOTE_TYPE_META } from '@/types'
 import { nanoid } from 'nanoid'
 import { useEffect, useRef, useState } from 'react'
-import TemplatePickerModal from '@/components/notes/TemplatePickerModal'
 import { expandTemplate } from '@/store/slices/templatesSlice'
 import { NOTE_TYPE_ICONS } from '@/lib/noteIcons'
 import FolderTree from '@/components/notes/FolderTree'
+import { autoOrganize, buildAutoFolders } from '@/store/slices/foldersSlice'
 
 const IconNotes = () => (
   <svg
@@ -167,20 +170,6 @@ const IconGroupAlpha = () => (
     <line x1="12" y1="4" x2="12" y2="20" />
   </svg>
 )
-const IconTemplates = () => (
-  <svg
-    width="14"
-    height="14"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    viewBox="0 0 24 24"
-  >
-    <path d="M4 6h16M4 10h16M4 14h10M4 18h6" />
-    <circle cx="19" cy="17" r="3" />
-    <path d="M21.17 20.17L23 22" />
-  </svg>
-)
 
 const NAV_ITEMS = [
   { to: '/notes-map', label: 'Notas', Icon: IconNotes },
@@ -191,7 +180,7 @@ const NAV_ITEMS = [
   { to: '/settings', label: 'Ajustes', Icon: IconSettings },
 ]
 
-type GroupBy = 'none' | 'type' | 'tag' | 'sprint' | 'alpha'
+type GroupBy = NotesGroupBy
 
 const GROUP_BY_OPTIONS: { value: GroupBy; Icon: () => JSX.Element; title: string }[] = [
   { value: 'none', Icon: IconGroupNone, title: 'Sin agrupar (recientes)' },
@@ -227,11 +216,24 @@ export default function Sidebar() {
   const notes = useAppSelector(s => s.notes.notes)
   const activeNoteId = useAppSelector(s => s.ui.activeNoteId)
   const sprints = useAppSelector(s => s.daily.sprints)
+  const groupBy = useAppSelector(s => s.ui.notesGroupBy)
+  const notesTypeFilter = useAppSelector(s => s.ui.notesTypeFilter)
+  const autoOrganizeMode = useAppSelector(s => s.ui.autoOrganizeMode)
+  const folders = useAppSelector(s => s.folders.folders)
   const [isMobile, setIsMobile] = useState(false)
   const [query, setQuery] = useState('')
   const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null)
-  const [groupBy, setGroupBy] = useState<GroupBy>('none')
-  const [showTemplatePicker, setShowTemplatePicker] = useState(false)
+  const [showTypeMenu, setShowTypeMenu] = useState(false)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+
+  function handleSetAutoOrganize(mode: AutoOrganizeMode) {
+    dispatch(setAutoOrganizeMode(mode))
+    if (mode !== 'off') {
+      const { assignments } = buildAutoFolders(folders, notes, sprints, mode)
+      dispatch(autoOrganize({ notes, sprints, mode }))
+      dispatch(bulkSetNoteFolders(assignments))
+    }
+  }
   const [sidebarTab, setSidebarTab] = useState<'list' | 'folders'>('folders')
   // ── Resize drag ────────────────────────────────────────────────────────────
   const resizingRef = useRef(false)
@@ -305,10 +307,14 @@ export default function Sidebar() {
   const defaultTemplateId = useAppSelector(s => s.templates.defaultTemplateId)
   const allTemplates = useAppSelector(s => s.templates.templates)
 
-  function createNoteFromDefaultTemplate() {
-    const tpl = allTemplates.find(t => t.id === defaultTemplateId) ?? allTemplates[0]
+  function createNoteOfType(type: NoteType) {
+    const tpl =
+      allTemplates.find(t => t.type === type && t.id === defaultTemplateId) ??
+      allTemplates.find(t => t.type === type) ??
+      allTemplates[0]
     const now = new Date().toISOString()
-    const title = `Nota ${new Date().toLocaleDateString('es', { day: '2-digit', month: 'short' })}`
+    const label = NOTE_TYPE_META[type]?.label ?? 'Nota'
+    const title = `${label} ${new Date().toLocaleDateString('es', { day: '2-digit', month: 'short' })}`
     const content = tpl ? expandTemplate(tpl.content, title) : `# ${title}\n\n`
     const note: Note = {
       id: nanoid(),
@@ -318,7 +324,7 @@ export default function Sidebar() {
       attachments: [],
       createdAt: now,
       updatedAt: now,
-      noteType: tpl?.type ?? 'note',
+      noteType: type,
       templateId: tpl?.id,
     }
     dispatch(addNote(note))
@@ -327,17 +333,21 @@ export default function Sidebar() {
   }
 
   function handleNewNote() {
-    createNoteFromDefaultTemplate()
+    createNoteOfType('note')
   }
 
   function handleDelete(n: Note) {
-    if (!window.confirm(`¿Eliminar "${n.title}"? Esta acción no se puede deshacer.`)) return
-    dispatch(deleteNote(n.id))
-    if (activeNoteId === n.id) {
-      dispatch(setActiveNoteId(null))
-      navigate('/editor')
+    if (deleteConfirmId === n.id) {
+      dispatch(deleteNote(n.id))
+      if (activeNoteId === n.id) {
+        dispatch(setActiveNoteId(null))
+        navigate('/editor')
+      }
+      setDeleteConfirmId(null)
+      setHoveredNoteId(null)
+    } else {
+      setDeleteConfirmId(n.id)
     }
-    setHoveredNoteId(null)
   }
 
   function handleDuplicate(n: Note) {
@@ -358,8 +368,7 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Template picker modal */}
-      {showTemplatePicker && <TemplatePickerModal onClose={() => setShowTemplatePicker(false)} />}
+      {/* No modal needed — type picker is now inline */}
 
       {/* Mobile backdrop */}
       {isMobile && isOpen && (
@@ -518,34 +527,42 @@ export default function Sidebar() {
           </button>
         </div>
 
-        {/* New note button */}
-        <div style={{ padding: '8px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', gap: '4px' }}>
-            {/* Primary: create with default template */}
+        {/* New note button — split: quick create + type picker */}
+        <div style={{ padding: '8px 8px 0', flexShrink: 0 }}>
+          <div
+            style={{
+              display: 'flex',
+              borderRadius: 'var(--radius-md)',
+              overflow: 'hidden',
+              border: '1px solid var(--accent-500)',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
+            }}
+          >
+            {/* Primary button */}
             <button
               onClick={handleNewNote}
-              title="Nueva nota (plantilla por defecto)"
+              title="Nueva nota"
               style={{
                 flex: 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: effectiveOpen ? 'flex-start' : 'center',
-                gap: '7px',
+                gap: '6px',
                 padding: effectiveOpen ? '7px 10px' : '7px',
-                borderRadius: 'var(--radius-md)',
                 border: 'none',
                 background: 'var(--accent-600)',
                 color: '#fff',
                 cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
+                fontFamily: 'var(--font-ui)',
                 fontSize: '12px',
-                fontWeight: 500,
+                fontWeight: 600,
+                letterSpacing: '0.01em',
                 transition: 'background var(--transition-fast)',
                 overflow: 'hidden',
                 whiteSpace: 'nowrap',
               }}
               onMouseEnter={e => {
-                ;(e.currentTarget as HTMLElement).style.background = 'var(--accent-700)'
+                ;(e.currentTarget as HTMLElement).style.background = 'var(--accent-500)'
               }}
               onMouseLeave={e => {
                 ;(e.currentTarget as HTMLElement).style.background = 'var(--accent-600)'
@@ -568,47 +585,149 @@ export default function Sidebar() {
               </AnimatePresence>
             </button>
 
-            {/* Secondary: open template picker */}
+            {/* Dropdown chevron — opens type picker */}
             <AnimatePresence initial={false}>
               {effectiveOpen && (
                 <motion.button
-                  key="tpl-btn"
+                  key="type-chevron"
                   initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: '30px' }}
+                  animate={{ opacity: 1, width: '26px' }}
                   exit={{ opacity: 0, width: 0 }}
                   transition={{ duration: 0.1 }}
-                  onClick={() => setShowTemplatePicker(true)}
-                  title="Elegir plantilla"
+                  onClick={() => setShowTypeMenu(p => !p)}
+                  title="Elegir tipo de nota"
                   style={{
                     flexShrink: 0,
-                    width: '30px',
-                    height: '34px',
+                    width: '26px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--accent-600)',
-                    background: 'transparent',
-                    color: 'var(--accent-400)',
+                    borderLeft: '1px solid rgba(255,255,255,0.18)',
+                    borderTop: 'none',
+                    borderRight: 'none',
+                    borderBottom: 'none',
+                    background: showTypeMenu ? 'var(--accent-700)' : 'var(--accent-600)',
+                    color: 'rgba(255,255,255,0.85)',
                     cursor: 'pointer',
-                    transition: 'all var(--transition-fast)',
-                    overflow: 'hidden',
+                    transition: 'background var(--transition-fast)',
                     padding: 0,
+                    fontSize: '10px',
                   }}
                   onMouseEnter={e => {
-                    const el = e.currentTarget as HTMLElement
-                    el.style.background = 'var(--accent-glow)'
+                    ;(e.currentTarget as HTMLElement).style.background = 'var(--accent-500)'
                   }}
                   onMouseLeave={e => {
-                    const el = e.currentTarget as HTMLElement
-                    el.style.background = 'transparent'
+                    ;(e.currentTarget as HTMLElement).style.background = showTypeMenu
+                      ? 'var(--accent-700)'
+                      : 'var(--accent-600)'
                   }}
                 >
-                  <IconTemplates />
+                  <svg
+                    width="10"
+                    height="10"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    viewBox="0 0 24 24"
+                    style={{
+                      transform: showTypeMenu ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.15s',
+                    }}
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
                 </motion.button>
               )}
             </AnimatePresence>
           </div>
+
+          {/* Inline type picker grid */}
+          <AnimatePresence>
+            {showTypeMenu && effectiveOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                transition={{ duration: 0.12 }}
+                style={{
+                  marginTop: '5px',
+                  background: 'var(--bg-2)',
+                  border: '1px solid var(--border-2)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '6px',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: '4px',
+                }}
+              >
+                {(
+                  [
+                    'note',
+                    'evidence',
+                    'technical',
+                    'meeting',
+                    'sprint',
+                    'task',
+                    'daily',
+                  ] as NoteType[]
+                ).map(type => {
+                  const meta = NOTE_TYPE_META[type]
+                  const TypeIcon = NOTE_TYPE_ICONS[type]
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => {
+                        createNoteOfType(type)
+                        setShowTypeMenu(false)
+                      }}
+                      title={meta.label}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '6px 4px',
+                        border: '1px solid var(--border-1)',
+                        borderRadius: 'var(--radius-sm)',
+                        background: 'var(--bg-1)',
+                        color: 'var(--text-2)',
+                        cursor: 'pointer',
+                        fontSize: '9px',
+                        fontFamily: 'var(--font-ui)',
+                        transition: 'all 0.1s',
+                      }}
+                      onMouseEnter={e => {
+                        const el = e.currentTarget as HTMLElement
+                        el.style.background = 'var(--bg-3)'
+                        el.style.borderColor = meta.color
+                        el.style.color = meta.color
+                      }}
+                      onMouseLeave={e => {
+                        const el = e.currentTarget as HTMLElement
+                        el.style.background = 'var(--bg-1)'
+                        el.style.borderColor = 'var(--border-1)'
+                        el.style.color = 'var(--text-2)'
+                      }}
+                    >
+                      <span style={{ color: meta.color, display: 'flex' }}>
+                        <TypeIcon />
+                      </span>
+                      <span
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          maxWidth: '100%',
+                        }}
+                      >
+                        {meta.label}
+                      </span>
+                    </button>
+                  )
+                })}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Search — visible only when open */}
@@ -850,7 +969,7 @@ export default function Sidebar() {
                     {GROUP_BY_OPTIONS.map(opt => (
                       <button
                         key={opt.value}
-                        onClick={() => setGroupBy(opt.value)}
+                        onClick={() => dispatch(setNotesGroupBy(opt.value))}
                         title={opt.title}
                         style={{
                           padding: '4px 6px',
@@ -870,21 +989,126 @@ export default function Sidebar() {
                     ))}
                   </div>
 
+                  {/* Auto-organize mode selector */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '2px',
+                      padding: '3px 8px',
+                      borderBottom: '1px solid var(--border-1)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '9px',
+                        color: 'var(--text-3)',
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        paddingRight: '4px',
+                        flexShrink: 0,
+                      }}
+                    >
+                      Auto
+                    </span>
+                    {[
+                      { value: 'off' as AutoOrganizeMode, label: '—', title: 'Sin auto-organizar' },
+                      {
+                        value: 'type' as AutoOrganizeMode,
+                        label: 'tipo',
+                        title: 'Organizar por tipo automáticamente',
+                      },
+                      {
+                        value: 'sprint' as AutoOrganizeMode,
+                        label: 'sprint',
+                        title: 'Organizar por sprint automáticamente',
+                      },
+                      {
+                        value: 'both' as AutoOrganizeMode,
+                        label: 'ambos',
+                        title: 'Organizar por tipo y sprint',
+                      },
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleSetAutoOrganize(opt.value)}
+                        title={opt.title}
+                        style={{
+                          padding: '3px 7px',
+                          borderRadius: 'var(--radius-sm)',
+                          border: 'none',
+                          background:
+                            autoOrganizeMode === opt.value ? 'var(--accent-glow)' : 'transparent',
+                          color:
+                            autoOrganizeMode === opt.value ? 'var(--accent-400)' : 'var(--text-3)',
+                          fontSize: '10px',
+                          cursor: 'pointer',
+                          fontFamily: 'var(--font-mono)',
+                          transition: 'all 0.1s',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Active type filter badge */}
+                  {notesTypeFilter && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '3px 8px',
+                        background: 'var(--accent-glow)',
+                        borderBottom: '1px solid var(--border-1)',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <span style={{ fontSize: '10px', color: 'var(--accent-400)', flex: 1 }}>
+                        Tipo:{' '}
+                        {NOTE_TYPE_META[notesTypeFilter as NoteType]?.label ?? notesTypeFilter}
+                      </span>
+                      <button
+                        onClick={() => dispatch(setNotesTypeFilter(null))}
+                        title="Quitar filtro"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--accent-400)',
+                          padding: '1px 3px',
+                          fontSize: '11px',
+                          lineHeight: 1,
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
                   {/* Notes list */}
                   <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px 8px' }}>
                     {(() => {
                       const q = query.toLowerCase().trim()
 
+                      // Apply type filter from command palette
+                      const typeFiltered = notesTypeFilter
+                        ? notes.filter(n => n.noteType === notesTypeFilter)
+                        : notes
+
                       // Apply search filter
                       const searched = q
-                        ? notes.filter(
+                        ? typeFiltered.filter(
                             n =>
                               n.title.toLowerCase().includes(q) ||
                               n.content.toLowerCase().includes(q) ||
                               n.tags.some(t => t.toLowerCase().includes(q)) ||
                               (n.noteType && n.noteType.toLowerCase().includes(q))
                           )
-                        : notes
+                        : typeFiltered
 
                       // Build groups
                       type Group = { key: string; label: string; icon?: string; notes: Note[] }
@@ -999,163 +1223,242 @@ export default function Sidebar() {
                           </p>
 
                           {/* Note items */}
-                          {group.notes.map(n => (
-                            <div
-                              key={n.id}
-                              style={{ position: 'relative' }}
-                              onMouseEnter={() => setHoveredNoteId(n.id)}
-                              onMouseLeave={() => setHoveredNoteId(null)}
-                            >
-                              <NavLink to={`/editor/${n.id}`} style={{ textDecoration: 'none' }}>
-                                {({ isActive }) => (
-                                  <div
-                                    style={{
-                                      padding: '5px 8px',
-                                      paddingRight: hoveredNoteId === n.id ? '56px' : '8px',
-                                      borderRadius: 'var(--radius-sm)',
-                                      marginBottom: '1px',
-                                      fontFamily: 'var(--font-ui)',
-                                      fontSize: '12px',
-                                      color: isActive ? 'var(--accent-400)' : 'var(--text-2)',
-                                      background: isActive
-                                        ? 'var(--accent-glow)'
-                                        : hoveredNoteId === n.id
-                                          ? 'var(--bg-3)'
-                                          : 'transparent',
-                                      cursor: 'pointer',
-                                      transition: 'all var(--transition-fast)',
-                                    }}
-                                  >
+                          {group.notes.map(n => {
+                            const typeMeta = NOTE_TYPE_META[n.noteType as NoteType]
+                            const TypeIcon = NOTE_TYPE_ICONS[n.noteType as NoteType]
+                            const isDelConfirm = deleteConfirmId === n.id
+                            return (
+                              <div
+                                key={n.id}
+                                style={{ position: 'relative' }}
+                                onMouseEnter={() => {
+                                  setHoveredNoteId(n.id)
+                                }}
+                                onMouseLeave={() => {
+                                  setHoveredNoteId(null)
+                                  // cancel pending delete confirm if mouse leaves
+                                  if (deleteConfirmId === n.id) setDeleteConfirmId(null)
+                                }}
+                              >
+                                <NavLink to={`/editor/${n.id}`} style={{ textDecoration: 'none' }}>
+                                  {({ isActive }) => (
                                     <div
                                       style={{
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '4px',
+                                        gap: '6px',
+                                        padding: '5px 8px',
+                                        paddingRight: hoveredNoteId === n.id ? '60px' : '8px',
+                                        borderRadius: 'var(--radius-md)',
+                                        marginBottom: '1px',
+                                        fontFamily: 'var(--font-ui)',
+                                        fontSize: '12px',
+                                        color: isActive ? 'var(--accent-400)' : 'var(--text-1)',
+                                        background: isActive
+                                          ? 'var(--accent-glow)'
+                                          : hoveredNoteId === n.id
+                                            ? 'var(--bg-3)'
+                                            : 'transparent',
+                                        cursor: 'pointer',
+                                        transition: 'all var(--transition-fast)',
+                                        borderLeft: `2px solid ${
+                                          isActive
+                                            ? 'var(--accent-500)'
+                                            : (typeMeta?.color ?? 'transparent')
+                                        }`,
                                       }}
                                     >
-                                      {n.noteType &&
-                                        n.noteType !== 'note' &&
-                                        groupBy !== 'type' &&
-                                        (() => {
-                                          const TypeIcon = NOTE_TYPE_ICONS[n.noteType as NoteType]
-                                          return TypeIcon ? (
-                                            <span
-                                              style={{
-                                                display: 'flex',
-                                                flexShrink: 0,
-                                                color: 'var(--text-3)',
-                                              }}
-                                            >
-                                              <TypeIcon />
-                                            </span>
-                                          ) : null
-                                        })()}
-                                      <span
-                                        style={{
-                                          overflow: 'hidden',
-                                          textOverflow: 'ellipsis',
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                      >
-                                        {n.title || 'Sin título'}
-                                      </span>
-                                    </div>
-                                    {n.tags.length > 0 && (
-                                      <div
-                                        style={{
-                                          display: 'flex',
-                                          gap: '3px',
-                                          marginTop: '2px',
-                                          flexWrap: 'wrap',
-                                        }}
-                                      >
-                                        {n.tags.slice(0, 3).map(t => (
-                                          <button
-                                            key={t}
-                                            onClick={e => {
-                                              e.preventDefault()
-                                              e.stopPropagation()
-                                              setQuery(t)
-                                            }}
-                                            title={`Filtrar por #${t}`}
+                                      {/* Type icon */}
+                                      {TypeIcon && groupBy !== 'type' && (
+                                        <span
+                                          style={{
+                                            display: 'flex',
+                                            flexShrink: 0,
+                                            color: typeMeta?.color ?? 'var(--text-3)',
+                                            opacity: isActive ? 1 : 0.75,
+                                          }}
+                                        >
+                                          <TypeIcon />
+                                        </span>
+                                      )}
+
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div
+                                          style={{
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                            fontWeight: isActive ? 600 : 400,
+                                          }}
+                                        >
+                                          {n.title || 'Sin título'}
+                                        </div>
+                                        {n.tags.length > 0 && (
+                                          <div
                                             style={{
-                                              fontSize: '9px',
-                                              padding: '1px 5px',
-                                              borderRadius: '3px',
-                                              background: 'var(--accent-glow)',
-                                              color: 'var(--accent-400)',
-                                              fontFamily: 'var(--font-mono)',
-                                              border: 'none',
-                                              cursor: 'pointer',
+                                              display: 'flex',
+                                              gap: '3px',
+                                              marginTop: '2px',
+                                              flexWrap: 'wrap',
                                             }}
                                           >
-                                            {t}
-                                          </button>
-                                        ))}
+                                            {n.tags.slice(0, 3).map(t => (
+                                              <button
+                                                key={t}
+                                                onClick={e => {
+                                                  e.preventDefault()
+                                                  e.stopPropagation()
+                                                  setQuery(t)
+                                                }}
+                                                title={`Filtrar por #${t}`}
+                                                style={{
+                                                  fontSize: '9px',
+                                                  padding: '1px 5px',
+                                                  borderRadius: '3px',
+                                                  background: 'var(--accent-glow)',
+                                                  color: 'var(--accent-400)',
+                                                  fontFamily: 'var(--font-mono)',
+                                                  border: 'none',
+                                                  cursor: 'pointer',
+                                                }}
+                                              >
+                                                #{t}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        )}
                                       </div>
-                                    )}
+                                    </div>
+                                  )}
+                                </NavLink>
+
+                                {/* Action buttons on hover */}
+                                {hoveredNoteId === n.id && (
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      top: '50%',
+                                      right: '4px',
+                                      transform: 'translateY(-50%)',
+                                      display: 'flex',
+                                      gap: '2px',
+                                      zIndex: 1,
+                                    }}
+                                  >
+                                    {/* Duplicate */}
+                                    <button
+                                      title="Duplicar nota"
+                                      onClick={e => {
+                                        e.preventDefault()
+                                        handleDuplicate(n)
+                                      }}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        width: '26px',
+                                        height: '26px',
+                                        borderRadius: 'var(--radius-sm)',
+                                        border: '1px solid var(--border-2)',
+                                        background: 'var(--bg-2)',
+                                        color: 'var(--text-2)',
+                                        cursor: 'pointer',
+                                      }}
+                                      onMouseEnter={e => {
+                                        const el = e.currentTarget as HTMLElement
+                                        el.style.background = 'var(--bg-3)'
+                                        el.style.color = 'var(--text-0)'
+                                      }}
+                                      onMouseLeave={e => {
+                                        const el = e.currentTarget as HTMLElement
+                                        el.style.background = 'var(--bg-2)'
+                                        el.style.color = 'var(--text-2)'
+                                      }}
+                                    >
+                                      <svg
+                                        width="11"
+                                        height="11"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="1.8"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                                      </svg>
+                                    </button>
+
+                                    {/* Delete — 1st click shows confirm, 2nd click deletes */}
+                                    <button
+                                      title={
+                                        isDelConfirm
+                                          ? '¿Confirmar eliminación? Clic de nuevo para borrar'
+                                          : 'Eliminar nota'
+                                      }
+                                      onClick={e => {
+                                        e.preventDefault()
+                                        handleDelete(n)
+                                      }}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        width: isDelConfirm ? '52px' : '26px',
+                                        height: '26px',
+                                        borderRadius: 'var(--radius-sm)',
+                                        border: `1px solid ${
+                                          isDelConfirm ? 'rgba(239,68,68,0.6)' : 'var(--border-2)'
+                                        }`,
+                                        background: isDelConfirm
+                                          ? 'rgba(239,68,68,0.15)'
+                                          : 'var(--bg-2)',
+                                        color: isDelConfirm ? '#ef4444' : 'var(--text-2)',
+                                        cursor: 'pointer',
+                                        gap: '4px',
+                                        fontSize: '9px',
+                                        fontFamily: 'var(--font-ui)',
+                                        fontWeight: 600,
+                                        transition: 'all 0.12s',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                      }}
+                                      onMouseEnter={e => {
+                                        if (!isDelConfirm) {
+                                          const el = e.currentTarget as HTMLElement
+                                          el.style.borderColor = 'rgba(239,68,68,0.5)'
+                                          el.style.color = '#ef4444'
+                                          el.style.background = 'rgba(239,68,68,0.08)'
+                                        }
+                                      }}
+                                      onMouseLeave={e => {
+                                        if (!isDelConfirm) {
+                                          const el = e.currentTarget as HTMLElement
+                                          el.style.borderColor = 'var(--border-2)'
+                                          el.style.color = 'var(--text-2)'
+                                          el.style.background = 'var(--bg-2)'
+                                        }
+                                      }}
+                                    >
+                                      <svg
+                                        width="11"
+                                        height="11"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="1.8"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <polyline points="3 6 5 6 21 6" />
+                                        <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+                                        <path d="M10 11v6M14 11v6" />
+                                        <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+                                      </svg>
+                                      {isDelConfirm && 'Borrar'}
+                                    </button>
                                   </div>
                                 )}
-                              </NavLink>
-                              {/* Action buttons on hover */}
-                              {hoveredNoteId === n.id && (
-                                <div
-                                  style={{
-                                    position: 'absolute',
-                                    top: '50%',
-                                    right: '4px',
-                                    transform: 'translateY(-50%)',
-                                    display: 'flex',
-                                    gap: '2px',
-                                    zIndex: 1,
-                                  }}
-                                >
-                                  <button
-                                    title="Duplicar nota"
-                                    onClick={() => handleDuplicate(n)}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      width: '24px',
-                                      height: '24px',
-                                      borderRadius: 'var(--radius-sm)',
-                                      border: '1px solid var(--border-2)',
-                                      background: 'var(--bg-2)',
-                                      color: 'var(--text-2)',
-                                      cursor: 'pointer',
-                                      fontSize: '12px',
-                                    }}
-                                  >
-                                    ⧉
-                                  </button>
-                                  <button
-                                    title="Eliminar nota"
-                                    onClick={() => handleDelete(n)}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      width: '24px',
-                                      height: '24px',
-                                      borderRadius: 'var(--radius-sm)',
-                                      border: '1px solid rgba(239,68,68,0.3)',
-                                      background: 'var(--bg-2)',
-                                      color: '#ef4444',
-                                      cursor: 'pointer',
-                                      fontSize: '15px',
-                                      lineHeight: 1,
-                                    }}
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                              </div>
+                            )
+                          })}
                         </div>
                       ))
                     })()}

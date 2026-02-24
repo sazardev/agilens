@@ -1,13 +1,13 @@
 import { configureStore, createListenerMiddleware } from '@reduxjs/toolkit'
 import { useDispatch, useSelector } from 'react-redux'
-import notesReducer, { removeAttachment } from './slices/notesSlice'
+import notesReducer, { removeAttachment, addNote, bulkSetNoteFolders } from './slices/notesSlice'
 import dailyReducer from './slices/dailySlice'
 import gitReducer from './slices/gitSlice'
 import settingsReducer, { defaultSettings } from './slices/settingsSlice'
 import uiReducer from './slices/uiSlice'
 import templatesReducer from './slices/templatesSlice'
 import { BUILTIN_TEMPLATES } from './slices/templatesSlice'
-import foldersReducer from './slices/foldersSlice'
+import foldersReducer, { autoOrganize, buildAutoFolders } from './slices/foldersSlice'
 import impedimentsReducer from './slices/impedimentsSlice'
 import { deleteAttachmentBlob } from '@/lib/attachmentsDb'
 
@@ -20,6 +20,28 @@ listenerMiddleware.startListening({
   actionCreator: removeAttachment,
   effect: async action => {
     void deleteAttachmentBlob(action.payload.attachmentId)
+  },
+})
+
+// Auto-organize folders whenever a note is added
+listenerMiddleware.startListening({
+  actionCreator: addNote,
+  effect: (_, api) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = api.getState() as any
+    const mode: string = state.ui?.autoOrganizeMode ?? 'off'
+    if (mode === 'off') return
+    const notes = state.notes?.notes ?? []
+    const sprints = state.daily?.sprints ?? []
+    const folders = state.folders?.folders ?? []
+    const { assignments } = buildAutoFolders(
+      folders,
+      notes,
+      sprints,
+      mode as 'type' | 'sprint' | 'both'
+    )
+    api.dispatch(autoOrganize({ notes, sprints, mode: mode as 'type' | 'sprint' | 'both' }))
+    api.dispatch(bulkSetNoteFolders(assignments))
   },
 })
 
@@ -62,6 +84,9 @@ function loadState() {
         n.attachments ? n : { ...n, attachments: [] }
       )
     }
+    // Remove stale partial `ui` key (saved in a previous session) so that
+    // uiSlice can use its own initialState (sidebarWidth, sidebarOpen, etc.).
+    delete (saved as Record<string, unknown>).ui
     return saved
   } catch {
     return undefined
@@ -82,7 +107,14 @@ function saveState(state: ReturnType<typeof store.getState>) {
     }
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ notes: notesWithoutBlobs, daily, settings, templates, folders, impediments })
+      JSON.stringify({
+        notes: notesWithoutBlobs,
+        daily,
+        settings,
+        templates,
+        folders,
+        impediments,
+      })
     )
   } catch {
     // storage full or unavailable

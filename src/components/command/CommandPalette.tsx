@@ -15,7 +15,8 @@ import type { JSX } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '@/store'
 import { addNote } from '@/store/slices/notesSlice'
-import type { NoteType } from '@/types'
+import { setNotesGroupBy, setNotesTypeFilter, setSidebarOpen } from '@/store/slices/uiSlice'
+import type { NoteType, NotesGroupBy } from '@/types'
 import { NOTE_TYPE_META } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -516,6 +517,20 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     }
 
     // ── Filtrar por tipo ──────────────────────────────────────────────────────
+    // Clear filter command
+    if (!q || 'limpiar filtro todos tipos'.includes(q)) {
+      list.push({
+        id: 'filter-clear',
+        label: 'Filtrar: Todos los tipos',
+        subtitle: 'Quitar filtro de tipo en la barra lateral',
+        category: 'filter',
+        icon: <IcoFilter />,
+        action: () => {
+          dispatch(setNotesTypeFilter(null))
+          go('/notes-map')
+        },
+      })
+    }
     for (const type of noteTypes) {
       const meta = NOTE_TYPE_META[type]
       const label = `Filtrar: ${meta.label}`
@@ -523,52 +538,63 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         list.push({
           id: `filter-${type}`,
           label,
-          subtitle: `Mostrar solo notas de tipo ${meta.label}`,
+          subtitle: `Mostrar solo notas de tipo ${meta.label} en la barra lateral`,
           category: 'filter',
           icon: <IcoFilter />,
           badgeColor: meta.color,
           badge: meta.label,
-          action: () => go('/notes-map'),
+          action: () => {
+            dispatch(setNotesTypeFilter(type))
+            dispatch(setSidebarOpen(true))
+            go('/notes-map')
+          },
         })
       }
     }
 
     // ── Ordenar notas ─────────────────────────────────────────────────────────
-    const sortOptions: Array<{ id: string; label: string }> = [
-      { id: 'sort-updated', label: 'Ordenar: Más recientes' },
-      { id: 'sort-created', label: 'Ordenar: Más antiguas' },
-      { id: 'sort-alpha', label: 'Ordenar: A → Z' },
+    const sortOptions: Array<{ id: string; label: string; groupBy: NotesGroupBy }> = [
+      { id: 'sort-updated', label: 'Ordenar: Más recientes', groupBy: 'none' },
+      { id: 'sort-alpha', label: 'Ordenar: A → Z', groupBy: 'alpha' },
     ]
     for (const s of sortOptions) {
       if (!q || s.label.toLowerCase().includes(q) || 'ordenar'.includes(q)) {
         list.push({
           id: s.id,
           label: s.label,
-          subtitle: 'Ir a Mapa de notas',
+          subtitle: 'Cambia agrupación en la barra lateral',
           category: 'sort',
           icon: <IcoSort />,
-          action: () => go('/notes-map'),
+          action: () => {
+            dispatch(setNotesGroupBy(s.groupBy))
+            dispatch(setSidebarOpen(true))
+            onClose()
+          },
         })
       }
     }
 
     // ── Agrupar notas ─────────────────────────────────────────────────────────
-    const groupOptions: Array<{ id: string; label: string }> = [
-      { id: 'group-none', label: 'Agrupar: Sin agrupación' },
-      { id: 'group-type', label: 'Agrupar: Por tipo' },
-      { id: 'group-tag', label: 'Agrupar: Por etiqueta' },
-      { id: 'group-sprint', label: 'Agrupar: Por sprint' },
-      { id: 'group-alpha', label: 'Agrupar: Alfabético' },
+    const groupOptions: Array<{ id: string; label: string; groupBy: NotesGroupBy }> = [
+      { id: 'group-none', label: 'Agrupar: Sin agrupación', groupBy: 'none' },
+      { id: 'group-type', label: 'Agrupar: Por tipo', groupBy: 'type' },
+      { id: 'group-tag', label: 'Agrupar: Por etiqueta', groupBy: 'tag' },
+      { id: 'group-sprint', label: 'Agrupar: Por sprint', groupBy: 'sprint' },
+      { id: 'group-alpha', label: 'Agrupar: Alfabético', groupBy: 'alpha' },
     ]
     for (const g of groupOptions) {
       if (!q || g.label.toLowerCase().includes(q) || 'agrupar'.includes(q)) {
         list.push({
           id: g.id,
           label: g.label,
-          subtitle: 'Ir a Mapa de notas',
+          subtitle: 'Cambia agrupación en la barra lateral',
           category: 'filter',
           icon: <IcoGroup />,
-          action: () => go('/notes-map'),
+          action: () => {
+            dispatch(setNotesGroupBy(g.groupBy))
+            dispatch(setSidebarOpen(true))
+            onClose()
+          },
         })
       }
     }

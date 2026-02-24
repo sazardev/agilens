@@ -224,6 +224,7 @@ function ItemRow({
 }) {
   const [editing, setEditing] = useState(false)
   const [val, setVal] = useState(text)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   function commit() {
     if (val.trim()) onEdit(val.trim())
@@ -238,7 +239,7 @@ function ItemRow({
         alignItems: 'center',
         gap: '8px',
         padding: '6px 10px 6px 12px',
-        borderRadius: '6px',
+        borderRadius: 'var(--radius-md)',
         background: 'var(--bg-1)',
         borderLeft: `2px solid ${accentColor}`,
       }}
@@ -282,24 +283,44 @@ function ItemRow({
         </span>
       )}
       <button
-        onClick={onRemove}
-        aria-label="Eliminar"
+        onClick={() => {
+          if (confirmDelete) {
+            onRemove()
+            setConfirmDelete(false)
+          } else setConfirmDelete(true)
+        }}
+        onMouseLeave={() => setConfirmDelete(false)}
+        aria-label={confirmDelete ? '¿Confirmar?' : 'Eliminar'}
+        title={confirmDelete ? '¿Confirmar borrar?' : 'Eliminar'}
         style={{
-          background: 'none',
-          border: 'none',
+          background: confirmDelete ? 'rgba(239,68,68,0.15)' : 'none',
+          border: confirmDelete ? '1px solid rgba(239,68,68,0.35)' : '1px solid transparent',
+          borderRadius: 'var(--radius-sm)',
           cursor: 'pointer',
-          color: 'var(--text-3)',
-          padding: '0 2px',
-          fontSize: '14px',
+          color: confirmDelete ? '#ef4444' : 'var(--text-3)',
+          padding: '2px 5px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '3px',
+          fontSize: '11px',
           lineHeight: 1,
           flexShrink: 0,
-          opacity: 0.5,
-          transition: 'opacity 0.15s',
+          transition: 'all 0.15s',
+          whiteSpace: 'nowrap',
         }}
-        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.opacity = '1')}
-        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.opacity = '0.5')}
       >
-        x
+        <svg
+          width="12"
+          height="12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          viewBox="0 0 24 24"
+        >
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+        </svg>
+        {confirmDelete && <span>Borrar</span>}
       </button>
     </div>
   )
@@ -328,7 +349,7 @@ function SuggestionChips({
           style={{
             fontSize: '11px',
             padding: '2px 8px',
-            borderRadius: '10px',
+            borderRadius: '999px',
             border: '1px dashed var(--border-2)',
             background: 'transparent',
             color: 'var(--text-2)',
@@ -422,9 +443,10 @@ function NoteCheckRow({
         alignItems: 'center',
         gap: '9px',
         padding: '6px 10px',
-        borderRadius: '6px',
+        borderRadius: 'var(--radius-md)',
         background: checked ? 'var(--accent-glow)' : 'transparent',
         border: `1px solid ${checked ? 'var(--accent-600)' : 'var(--border-1)'}`,
+
         cursor: 'pointer',
         transition: 'all 0.15s',
       }}
@@ -661,6 +683,7 @@ export default function DailyPage() {
         content,
         tags: ['daily', ...(sprint ? [sprint.name.toLowerCase().replace(/\s+/g, '-')] : [])],
         noteType: 'daily',
+        sprintId: sprint?.id,
         createdAt: now,
         updatedAt: now,
         attachments: [],
@@ -705,7 +728,7 @@ export default function DailyPage() {
   const card: React.CSSProperties = {
     background: 'var(--bg-2)',
     border: '1px solid var(--border-1)',
-    borderRadius: '10px',
+    borderRadius: 'var(--radius-md)',
     padding: '14px 16px',
   }
 
@@ -845,26 +868,6 @@ export default function DailyPage() {
               </svg>
               Historial
             </button>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={createDailyNote}
-              style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}
-            >
-              <svg
-                width="12"
-                height="12"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-              >
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="12" y1="18" x2="12" y2="12" />
-                <line x1="9" y1="15" x2="15" y2="15" />
-              </svg>
-              Crear nota
-            </button>
           </div>
 
           {/* Sprint */}
@@ -912,21 +915,35 @@ export default function DailyPage() {
                 <button
                   onClick={() => dispatch(deleteSprint(activeSprint.id))}
                   aria-label="Eliminar sprint"
+                  title="Eliminar sprint"
                   style={{
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
                     color: 'var(--text-3)',
-                    fontSize: '14px',
-                    padding: '0 2px',
+                    padding: '4px',
                     lineHeight: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    borderRadius: 'var(--radius-sm)',
+                    transition: 'color 0.15s',
                   }}
-                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#f87171')}
+                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#ef4444')}
                   onMouseLeave={e =>
                     ((e.currentTarget as HTMLElement).style.color = 'var(--text-3)')
                   }
                 >
-                  x
+                  <svg
+                    width="12"
+                    height="12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
                 </button>
               )}
               {!showSprintForm && (
@@ -1002,7 +1019,7 @@ export default function DailyPage() {
                       color: 'var(--text-3)',
                       background: 'transparent',
                       border: '1px dashed var(--border-2)',
-                      borderRadius: '6px',
+                      borderRadius: 'var(--radius-sm)',
                       padding: '3px 10px',
                       cursor: 'pointer',
                       width: 'fit-content',
@@ -1279,8 +1296,9 @@ export default function DailyPage() {
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: '10px',
-              padding: '0 2px',
+              padding: '4px 2px 0',
               flexWrap: 'wrap',
+              borderTop: '1px solid var(--border-1)',
             }}
           >
             <span
@@ -1293,7 +1311,12 @@ export default function DailyPage() {
             <button
               className="btn btn-primary"
               onClick={createDailyNote}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderRadius: 'var(--radius-md)',
+              }}
             >
               <svg
                 width="13"
@@ -1308,7 +1331,7 @@ export default function DailyPage() {
                 <line x1="12" y1="18" x2="12" y2="12" />
                 <line x1="9" y1="15" x2="15" y2="15" />
               </svg>
-              Crear nota Daily
+              Guardar como nota Daily
             </button>
           </div>
         </div>

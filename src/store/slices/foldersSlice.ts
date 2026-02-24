@@ -44,7 +44,7 @@ const NOTE_TYPE_ORDER: NoteType[] = [
  * tree.  Manual (non-system) folders are NOT touched.
  * Returns updated folders[] and a mapping noteId → folderId.
  */
-function buildAutoFolders(
+export function buildAutoFolders(
   existingFolders: Folder[],
   notes: Note[],
   sprints: Sprint[],
