@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import Sidebar from '@/components/layout/Sidebar'
 import StatusBar from '@/components/layout/StatusBar'
+import CommandPalette from '@/components/command/CommandPalette'
 import { useAppDispatch, useAppSelector } from '@/store'
 import { toggleSidebar } from '@/store/slices/uiSlice'
 import { useEffect, useState } from 'react'
@@ -28,6 +29,19 @@ export default function MainLayout() {
   const sidebarWidth = useAppSelector(s => s.ui.sidebarWidth)
   const sidebarAutoHide = useAppSelector(s => s.ui.sidebarAutoHide)
   const [isMobile, setIsMobile] = useState(false)
+  const [cmdOpen, setCmdOpen] = useState(false)
+
+  // Global Ctrl+K listener
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setCmdOpen(prev => !prev)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 768px)')
@@ -113,6 +127,7 @@ export default function MainLayout() {
         </main>
       </div>
       <StatusBar />
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
     </div>
   )
 }
