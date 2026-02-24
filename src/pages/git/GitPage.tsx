@@ -13,7 +13,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   gitInit,
-  gitRefresh,
+  gitSyncStatus,
   gitCommit,
   gitPush,
   gitCheckout,
@@ -469,9 +469,18 @@ export default function GitPage() {
   const [activeFileIdx, setActiveFileIdx] = useState(0)
   const navigate = useNavigate()
 
+  // Sync note files to LightningFS then refresh git status whenever
+  // the note list changes or we navigate to this page
   useEffect(() => {
-    if (initialized) void dispatch(gitRefresh(GIT_DIR))
-  }, [initialized, dispatch])
+    if (!initialized) return
+    void dispatch(
+      gitSyncStatus({
+        dir: GIT_DIR,
+        notes: notes.map(n => ({ id: n.id, content: n.content })),
+      })
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialized, dispatch, notes.length])
 
   useEffect(() => {
     if (!selectedOid) {
@@ -840,7 +849,14 @@ export default function GitPage() {
           className="btn btn-ghost"
           style={{ margin: '0 8px', padding: '3px 10px', fontSize: '11px', flexShrink: 0 }}
           disabled={loading}
-          onClick={() => void dispatch(gitRefresh(GIT_DIR))}
+          onClick={() =>
+            void dispatch(
+              gitSyncStatus({
+                dir: GIT_DIR,
+                notes: notes.map(n => ({ id: n.id, content: n.content })),
+              })
+            )
+          }
         >
           {loading ? '⟳ Actualizando…' : '⟳ Actualizar'}
         </button>

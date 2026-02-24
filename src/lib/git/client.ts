@@ -124,12 +124,52 @@ export async function setRemote(dir: string, config: GitHubConfig) {
   await git.addRemote({ fs, dir, remote: 'origin', url })
 }
 
-// ─── Write note ────────────────────────────────────────────────────────────────
+// ─── Write / delete note files ─────────────────────────────────────────────────
 
 export async function writeNoteFile(dir: string, noteId: string, content: string) {
   const notesDir = `${dir}/notes`
   await ensureDir(notesDir)
   await pfs.writeFile(`${notesDir}/${noteId}.md`, content, 'utf8')
+}
+
+export async function deleteNoteFile(dir: string, noteId: string) {
+  try {
+    await pfs.unlink(`${dir}/notes/${noteId}.md`)
+  } catch {
+    // file may not exist yet (never committed)
+  }
+}
+
+/**
+ * Sync the entire notes array to LightningFS:
+ *  - Write/overwrite every note that exists in Redux
+ *  - Delete any .md file in /notes that no longer has a matching note ID
+ */
+export async function syncNoteFiles(dir: string, notes: Array<{ id: string; content: string }>) {
+  const notesDir = `${dir}/notes`
+  await ensureDir(notesDir)
+
+  // Write all current notes
+  for (const note of notes) {
+    await pfs.writeFile(`${notesDir}/${note.id}.md`, note.content, 'utf8')
+  }
+
+  // Remove orphan files (deleted notes)
+  const knownIds = new Set(notes.map(n => `${n.id}.md`))
+  try {
+    const files = (await pfs.readdir(notesDir)) as string[]
+    for (const file of files) {
+      if (file.endsWith('.md') && !knownIds.has(file)) {
+        try {
+          await pfs.unlink(`${notesDir}/${file}`)
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  } catch {
+    // notesDir may not exist yet
+  }
 }
 
 // ─── Diff utilities ────────────────────────────────────────────────────────────

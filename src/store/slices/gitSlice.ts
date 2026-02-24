@@ -48,6 +48,19 @@ export const gitRefresh = createAsyncThunk('git/refresh', async (dir: string) =>
   return snapshot(dir)
 })
 
+/**
+ * Sync all note files to LightningFS (write existing, remove deleted),
+ * then refresh git status. This is the correct way to see pending changes
+ * before committing.
+ */
+export const gitSyncStatus = createAsyncThunk(
+  'git/syncStatus',
+  async ({ dir, notes }: { dir: string; notes: Array<{ id: string; content: string }> }) => {
+    await gitClient.syncNoteFiles(dir, notes)
+    return snapshot(dir)
+  }
+)
+
 export const gitCommit = createAsyncThunk(
   'git/commit',
   async ({
@@ -189,6 +202,23 @@ const gitSlice = createSlice({
       .addCase(gitRefresh.rejected, (state, a) => {
         state.loading = false
         state.error = a.error.message ?? 'Error al refrescar'
+      })
+
+    // ── gitSyncStatus ──
+    builder
+      .addCase(gitSyncStatus.pending, state => {
+        state.loading = true
+      })
+      .addCase(gitSyncStatus.fulfilled, (state, a) => {
+        state.loading = false
+        state.status = a.payload.status
+        state.log = a.payload.log
+        state.branches = a.payload.branches
+        state.currentBranch = a.payload.currentBranch
+      })
+      .addCase(gitSyncStatus.rejected, (state, a) => {
+        state.loading = false
+        state.error = a.error.message ?? 'Error al sincronizar estado'
       })
 
     // ── gitCommit ──
