@@ -126,18 +126,6 @@ const IcoChevronRight = () => (
     <polyline points="9 18 15 12 9 6" />
   </svg>
 )
-const IcoStar = () => (
-  <svg
-    width="13"
-    height="13"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    viewBox="0 0 24 24"
-  >
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-  </svg>
-)
 const IcoFlag = () => (
   <svg
     width="13"
@@ -915,7 +903,6 @@ function NoteRow({
         {
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
           padding: '8px 12px',
           background: 'var(--bg-1)',
           border: '1px solid var(--border-1)',

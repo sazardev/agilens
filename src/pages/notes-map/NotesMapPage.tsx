@@ -144,7 +144,6 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
     linkTag,
     linkSprint,
     linkDaily,
-    linkImpediment,
     prevNodes,
     canvasW,
     canvasH,
@@ -1712,10 +1711,6 @@ export default function NotesMapPage() {
     t.x = w / 2 - (w / 2 - t.x) * f
     t.y = h / 2 - (h / 2 - t.y) * f
     t.scale = Math.max(0.1, t.scale * f)
-  }
-  function resetView() {
-    transformRef.current = { x: 0, y: 0, scale: 1 }
-    simRunning.current = true
   }
   function fitView() {
     const nodes = nodesRef.current

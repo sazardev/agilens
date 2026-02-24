@@ -3,6 +3,7 @@
  * Minimal, focused, elegant.
  */
 import { useState, useRef, useCallback } from 'react'
+import type { JSX } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { nanoid } from '@reduxjs/toolkit'
 import { useAppDispatch, useAppSelector } from '@/store'

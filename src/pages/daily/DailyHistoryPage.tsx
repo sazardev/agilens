@@ -645,7 +645,6 @@ export default function DailyHistoryPage() {
   const currentStreak = useMemo(() => streakUpTo(entries, today), [entries, today])
 
   // Active sprint info
-  const activeSprint = sprints.find(s => s.id === activeSprintId)
   const selectedEntry = entries.find(e => e.date === selectedISO)
 
   // Summary counts for selected month
