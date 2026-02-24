@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from '@/store'
 import { gitDetect } from '@/store/slices/gitSlice'
 import { hydrateAttachments } from '@/store/slices/notesSlice'
 import { loadAllAttachmentBlobs, saveAttachmentBlob } from '@/lib/attachmentsDb'
+import InstallPrompt from '@/components/pwa/InstallPrompt'
 
 function AppInner() {
   const dispatch = useAppDispatch()
@@ -41,5 +42,10 @@ function AppInner() {
 }
 
 export default function App() {
-  return <AppInner />
+  return (
+    <>
+      <AppInner />
+      <InstallPrompt />
+    </>
+  )
 }

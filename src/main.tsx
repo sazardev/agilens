@@ -9,8 +9,12 @@ import { Provider } from 'react-redux'
 import { store } from '@/store'
 import ThemeProvider from '@/components/layout/ThemeProvider'
 import ErrorBoundary from '@/components/ErrorBoundary'
+import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import App from './App.tsx'
+
+// ─── Service Worker registration ─────────────────────────────────────────────
+registerSW({ immediate: true })
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
