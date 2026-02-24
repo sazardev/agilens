@@ -93,6 +93,14 @@ const notesSlice = createSlice({
       const note = state.notes.find(n => n.id === action.payload.id)
       if (note) note.color = action.payload.color
     },
+    /** Set kanban column status for a task note */
+    setKanbanStatus(
+      state,
+      action: PayloadAction<{ id: string; status: import('@/types').KanbanStatus }>
+    ) {
+      const note = state.notes.find(n => n.id === action.payload.id)
+      if (note) note.kanbanStatus = action.payload.status
+    },
   },
 })
 
@@ -111,6 +119,7 @@ export const {
   toggleNotePin,
   toggleNoteLocked,
   setNoteColor,
+  setKanbanStatus,
 } = notesSlice.actions
 
 export default notesSlice.reducer

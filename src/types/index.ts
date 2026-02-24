@@ -21,6 +21,19 @@ export interface NoteTemplate {
   isBuiltin?: boolean
 }
 
+export type KanbanStatus = 'backlog' | 'todo' | 'in-progress' | 'review' | 'done'
+
+export const KANBAN_STATUS_META: Record<
+  KanbanStatus,
+  { label: string; color: string; bg: string }
+> = {
+  backlog: { label: 'Backlog', color: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
+  todo: { label: 'Pendiente', color: '#60a5fa', bg: 'rgba(96,165,250,0.12)' },
+  'in-progress': { label: 'En progreso', color: '#fbbf24', bg: 'rgba(251,191,36,0.12)' },
+  review: { label: 'Revisión', color: '#a78bfa', bg: 'rgba(167,139,250,0.12)' },
+  done: { label: 'Hecho', color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
+}
+
 export interface Note {
   id: string
   title: string
@@ -37,6 +50,7 @@ export interface Note {
   pinned?: boolean // Nota fijada — aparece primero en la lista
   locked?: boolean // Nota bloqueada — solo lectura
   color?: string // Color de etiqueta visual (hex)
+  kanbanStatus?: KanbanStatus // estado para el tablero kanban
 }
 
 // ─── Folders ──────────────────────────────────────────────────────────────────
