@@ -6,7 +6,15 @@ import { useState, useMemo } from 'react'
 import { nanoid } from '@reduxjs/toolkit'
 import { useNavigate } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '@/store'
-import { addImpediment, updateImpediment, deleteImpediment } from '@/store/slices/impedimentsSlice'
+import {
+  addImpediment,
+  updateImpediment,
+  deleteImpediment,
+  linkEntry,
+  unlinkEntry,
+  linkNote,
+  unlinkNote,
+} from '@/store/slices/impedimentsSlice'
 import type { Impediment, ImpedimentStatus, ImpedimentSeverity } from '@/types'
 
 // ─── Date helper ─────────────────────────────────────────────────────────────
@@ -499,9 +507,76 @@ interface CardProps {
 }
 
 function ImpedimentCard({ imp, sprintName, onEdit, onDelete, onQuickResolve }: CardProps) {
+  const dispatch = useAppDispatch()
+  const taskNotes = useAppSelector(s => s.notes.notes.filter(n => n.noteType === 'task'))
+  const dailyEntries = useAppSelector(s => s.daily.entries)
+  const [linkPicker, setLinkPicker] = useState<'none' | 'task' | 'daily'>('none')
+  const [search, setSearch] = useState('')
+
   const isResolved = imp.status === 'resolved' || imp.status === 'wont-fix'
   const daysOpen = daysBetween(imp.openedAt, imp.resolvedAt ?? todayISO())
   const canResolve = imp.status === 'open' || imp.status === 'in-progress'
+
+  const linkedTasks = (imp.linkedNoteIds ?? [])
+    .map(id => taskNotes.find(n => n.id === id))
+    .filter((n): n is NonNullable<typeof n> => Boolean(n))
+
+  const linkedDailies = (imp.linkedEntryIds ?? [])
+    .map(id => dailyEntries.find(e => e.id === id))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+
+  const q = search.toLowerCase()
+  const availableTasks = taskNotes
+    .filter(n => !(imp.linkedNoteIds ?? []).includes(n.id))
+    .filter(n => !q || n.title.toLowerCase().includes(q))
+  const availableDailies = dailyEntries
+    .filter(e => !(imp.linkedEntryIds ?? []).includes(e.id))
+    .filter(e => !q || e.date.includes(q))
+    .slice(0, 30)
+
+  const closePicker = () => {
+    setLinkPicker('none')
+    setSearch('')
+  }
+
+  const linkedChip: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '2px 4px 2px 7px',
+    borderRadius: '10px',
+    fontSize: '11px',
+    background: 'var(--bg-2)',
+    border: '1px solid var(--border-1)',
+    color: 'var(--text-1)',
+    whiteSpace: 'nowrap',
+  }
+
+  const unlinkBtn: React.CSSProperties = {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: 'var(--text-3)',
+    padding: '0 1px',
+    lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    borderRadius: '2px',
+  }
+
+  const addLinkBtn = (label: string, type: 'task' | 'daily'): React.CSSProperties => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '3px',
+    padding: '2px 7px',
+    borderRadius: '10px',
+    fontSize: '11px',
+    background: linkPicker === type ? 'var(--accent-glow)' : 'transparent',
+    border: `1px solid ${linkPicker === type ? 'var(--accent-400)' : 'var(--border-1)'}`,
+    color: linkPicker === type ? 'var(--accent-400)' : 'var(--text-3)',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  })
 
   return (
     <div
@@ -610,7 +685,7 @@ function ImpedimentCard({ imp, sprintName, onEdit, onDelete, onQuickResolve }: C
       )}
 
       {/* Meta row */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
         {sprintName && (
           <span
             style={{
@@ -667,13 +742,182 @@ function ImpedimentCard({ imp, sprintName, onEdit, onDelete, onQuickResolve }: C
             </span>
           )}
         </span>
-        {imp.linkedEntryIds && imp.linkedEntryIds.length > 0 && (
-          <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>
-            {imp.linkedEntryIds.length} daily{imp.linkedEntryIds.length !== 1 ? 's' : ''} vinculado
-            {imp.linkedEntryIds.length !== 1 ? 's' : ''}
+
+        {/* Linked task chips */}
+        {linkedTasks.map(n => (
+          <span key={n.id} style={linkedChip}>
+            <svg
+              width="10"
+              height="10"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              viewBox="0 0 24 24"
+            >
+              <polyline points="9 11 12 14 22 4" />
+              <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+            </svg>
+            {n.title.length > 28 ? n.title.slice(0, 28) + '…' : n.title}
+            <button
+              style={unlinkBtn}
+              title="Desvincular tarea"
+              onClick={() => dispatch(unlinkNote({ impedimentId: imp.id, noteId: n.id }))}
+            >
+              <IcoX />
+            </button>
           </span>
-        )}
+        ))}
+
+        {/* Linked daily chips */}
+        {linkedDailies.map(e => (
+          <span key={e.id} style={linkedChip}>
+            <IcoCalendar />
+            Daily {e.date}
+            <button
+              style={unlinkBtn}
+              title="Desvincular daily"
+              onClick={() => dispatch(unlinkEntry({ impedimentId: imp.id, entryId: e.id }))}
+            >
+              <IcoX />
+            </button>
+          </span>
+        ))}
+
+        {/* Link buttons */}
+        <button
+          style={addLinkBtn('+ Tarea', 'task')}
+          onClick={() => {
+            setSearch('')
+            setLinkPicker(p => (p === 'task' ? 'none' : 'task'))
+          }}
+        >
+          + Tarea
+        </button>
+        <button
+          style={addLinkBtn('+ Daily', 'daily')}
+          onClick={() => {
+            setSearch('')
+            setLinkPicker(p => (p === 'daily' ? 'none' : 'daily'))
+          }}
+        >
+          + Daily
+        </button>
       </div>
+
+      {/* Link picker */}
+      {linkPicker !== 'none' && (
+        <div
+          style={{
+            background: 'var(--bg-2)',
+            border: '1px solid var(--border-1)',
+            borderRadius: 'var(--radius-md)',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-1)' }}>
+            <input
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={linkPicker === 'task' ? 'Buscar tarea…' : 'Buscar daily (YYYY-MM-DD)…'}
+              style={{
+                width: '100%',
+                background: 'var(--bg-1)',
+                border: '1px solid var(--border-1)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '4px 8px',
+                fontSize: '12px',
+                color: 'var(--text-0)',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          <div style={{ maxHeight: '160px', overflowY: 'auto' }}>
+            {linkPicker === 'task' && availableTasks.length === 0 && (
+              <div style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-3)' }}>
+                {taskNotes.length === 0 ? 'No hay tareas creadas' : 'Sin coincidencias'}
+              </div>
+            )}
+            {linkPicker === 'task' &&
+              availableTasks.map(n => (
+                <button
+                  key={n.id}
+                  onClick={() => {
+                    dispatch(linkNote({ impedimentId: imp.id, noteId: n.id }))
+                    closePicker()
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: '1px solid var(--border-1)',
+                    padding: '7px 12px',
+                    fontSize: '12px',
+                    color: 'var(--text-0)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {n.title}
+                </button>
+              ))}
+            {linkPicker === 'daily' && availableDailies.length === 0 && (
+              <div style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-3)' }}>
+                {dailyEntries.length === 0 ? 'No hay dailies registrados' : 'Sin coincidencias'}
+              </div>
+            )}
+            {linkPicker === 'daily' &&
+              availableDailies.map(e => (
+                <button
+                  key={e.id}
+                  onClick={() => {
+                    dispatch(linkEntry({ impedimentId: imp.id, entryId: e.id }))
+                    closePicker()
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: '1px solid var(--border-1)',
+                    padding: '7px 12px',
+                    fontSize: '12px',
+                    color: 'var(--text-0)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📅 {e.date}
+                  {e.did.length ? ` · ${e.did.length} hecho${e.did.length !== 1 ? 's' : ''}` : ''}
+                </button>
+              ))}
+          </div>
+          <div
+            style={{
+              padding: '5px 8px',
+              borderTop: '1px solid var(--border-1)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+            }}
+          >
+            <button
+              onClick={closePicker}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '11px',
+                color: 'var(--text-3)',
+                padding: '2px 6px',
+              }}
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

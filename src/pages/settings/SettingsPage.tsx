@@ -1,10 +1,15 @@
 import { useAppDispatch, useAppSelector } from '@/store'
 import { updateSettings } from '@/store/slices/settingsSlice'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import type { AccentColor, EditorFont, UIDensity, UITheme, MarkdownPreviewFont } from '@/types'
 import AgilensLogo from '@/components/layout/AgilensLogo'
 import OnboardingModal from '@/components/onboarding/OnboardingModal'
 import GitHubConnect from '@/components/github/GitHubConnect'
+import { hashPassword, clearActivity, touchActivity } from '@/components/security/LockScreen'
+import { setNotes } from '@/store/slices/notesSlice'
+import { setEntries, setSprints } from '@/store/slices/dailySlice'
+import { setImpediments } from '@/store/slices/impedimentsSlice'
+import { clearAllFolders } from '@/store/slices/foldersSlice'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -140,6 +145,24 @@ export default function SettingsPage() {
   const dispatch = useAppDispatch()
   const s = useAppSelector(st => st.settings)
   const [showOnboarding, setShowOnboarding] = useState(false)
+
+  // ── Lock / security state ──────────────────────────────────────────────────
+  const [pwdStep, setPwdStep] = useState<'idle' | 'set' | 'change' | 'remove'>('idle')
+  const [pwdNew, setPwdNew] = useState('')
+  const [pwdConfirm, setPwdConfirm] = useState('')
+  const [pwdCurrent, setPwdCurrent] = useState('')
+  const [pwdError, setPwdError] = useState('')
+  const [pwdSaved, setPwdSaved] = useState(false)
+
+  // ── Data management state ─────────────────────────────────────────────────
+  const [confirmReset, setConfirmReset] = useState<string | null>(null)
+  const [resetDone, setResetDone] = useState<string | null>(null)
+  const confirmInputRef = useRef<HTMLInputElement>(null)
+
+  // ── Delete auth (password gate before destructive actions) ────────────────
+  const [deleteAuthStep, setDeleteAuthStep] = useState<string | null>(null)
+  const [deleteAuthPwd, setDeleteAuthPwd] = useState('')
+  const [deleteAuthError, setDeleteAuthError] = useState('')
 
   const set = (patch: Parameters<typeof updateSettings>[0]) => dispatch(updateSettings(patch))
 
@@ -702,6 +725,982 @@ export default function SettingsPage() {
           {/* GitHub */}
           <Section title="GitHub">
             <GitHubConnect />
+          </Section>
+
+          {/* ─── SEGURIDAD ────────────────────────────────────────────────────────── */}
+          <Section title="Seguridad">
+            {/* Bloqueo — toggle principal */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '16px',
+              }}
+            >
+              <div>
+                <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-0)' }}>
+                  Bloqueo con contraseña
+                </span>
+                <p style={{ fontSize: '11px', color: 'var(--text-2)', margin: '2px 0 0' }}>
+                  Muestra una pantalla de bloqueo al abrir o al expirar la sesión
+                </p>
+              </div>
+              <Toggle
+                checked={s.lockEnabled}
+                onChange={async v => {
+                  if (v && !s.lockPasswordHash) {
+                    setPwdStep('set')
+                  } else if (!v) {
+                    set({ lockEnabled: false })
+                    clearActivity()
+                  } else {
+                    set({ lockEnabled: true })
+                    touchActivity()
+                  }
+                }}
+              />
+            </div>
+
+            {/* Acciones rápidas cuando está habilitado */}
+            {s.lockEnabled && pwdStep === 'idle' && (
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => {
+                    setPwdStep('change')
+                    setPwdNew('')
+                    setPwdConfirm('')
+                    setPwdCurrent('')
+                    setPwdError('')
+                  }}
+                  style={{
+                    padding: '6px 13px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-2)',
+                    background: 'var(--bg-3)',
+                    color: 'var(--text-1)',
+                    fontSize: '12px',
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                  }}
+                >
+                  Cambiar contraseña
+                </button>
+                <button
+                  onClick={() => {
+                    setPwdStep('remove')
+                    setPwdCurrent('')
+                    setPwdError('')
+                  }}
+                  style={{
+                    padding: '6px 13px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid rgba(239,68,68,0.3)',
+                    background: 'rgba(239,68,68,0.08)',
+                    color: '#ef4444',
+                    fontSize: '12px',
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                  }}
+                >
+                  Quitar contraseña
+                </button>
+                <button
+                  onClick={() => {
+                    set({ lockEnabled: true })
+                    clearActivity()
+                    window.location.reload()
+                  }}
+                  style={{
+                    padding: '6px 13px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-2)',
+                    background: 'var(--bg-3)',
+                    color: 'var(--text-2)',
+                    fontSize: '12px',
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                  }}
+                >
+                  Bloquear ahora
+                </button>
+              </div>
+            )}
+
+            {/* ── Formulario: establecer contraseña ── */}
+            {pwdStep === 'set' && (
+              <div
+                style={{
+                  background: 'var(--bg-2)',
+                  border: '1px solid var(--border-1)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-0)' }}>
+                  Establecer contraseña
+                </div>
+                <input
+                  type="password"
+                  placeholder="Nueva contraseña"
+                  autoFocus
+                  value={pwdNew}
+                  onChange={e => {
+                    setPwdNew(e.target.value)
+                    setPwdError('')
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-2)',
+                    background: 'var(--bg-3)',
+                    color: 'var(--text-0)',
+                    fontSize: '13px',
+                    fontFamily: 'inherit',
+                    outline: 'none',
+                    boxSizing: 'border-box' as const,
+                  }}
+                />
+                <input
+                  type="password"
+                  placeholder="Confirmar contraseña"
+                  value={pwdConfirm}
+                  onChange={e => {
+                    setPwdConfirm(e.target.value)
+                    setPwdError('')
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-2)',
+                    background: 'var(--bg-3)',
+                    color: 'var(--text-0)',
+                    fontSize: '13px',
+                    fontFamily: 'inherit',
+                    outline: 'none',
+                    boxSizing: 'border-box' as const,
+                  }}
+                />
+                {pwdError && <div style={{ fontSize: '11px', color: '#ef4444' }}>{pwdError}</div>}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={async () => {
+                      if (!pwdNew.trim()) return setPwdError('La contraseña no puede estar vacía')
+                      if (pwdNew !== pwdConfirm) return setPwdError('Las contraseñas no coinciden')
+                      if (pwdNew.length < 4) return setPwdError('Mínimo 4 caracteres')
+                      const hash = await hashPassword(pwdNew)
+                      set({ lockEnabled: true, lockPasswordHash: hash })
+                      touchActivity()
+                      setPwdStep('idle')
+                      setPwdNew('')
+                      setPwdConfirm('')
+                      setPwdSaved(true)
+                      setTimeout(() => setPwdSaved(false), 2500)
+                    }}
+                    style={{
+                      padding: '7px 16px',
+                      borderRadius: 'var(--radius-md)',
+                      border: 'none',
+                      background: 'var(--accent-600)',
+                      color: '#fff',
+                      fontSize: '12px',
+                      fontFamily: 'inherit',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Guardar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPwdStep('idle')
+                      setPwdNew('')
+                      setPwdConfirm('')
+                    }}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-2)',
+                      background: 'transparent',
+                      color: 'var(--text-1)',
+                      fontSize: '12px',
+                      fontFamily: 'inherit',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+                {pwdSaved && (
+                  <div style={{ fontSize: '11px', color: '#34d399' }}>✓ Contraseña establecida</div>
+                )}
+              </div>
+            )}
+
+            {/* ── Formulario: cambiar contraseña ── */}
+            {pwdStep === 'change' && (
+              <div
+                style={{
+                  background: 'var(--bg-2)',
+                  border: '1px solid var(--border-1)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-0)' }}>
+                  Cambiar contraseña
+                </div>
+                {[
+                  { ph: 'Contraseña actual', val: pwdCurrent, set: setPwdCurrent },
+                  { ph: 'Nueva contraseña', val: pwdNew, set: setPwdNew },
+                  { ph: 'Confirmar nueva contraseña', val: pwdConfirm, set: setPwdConfirm },
+                ].map(({ ph, val, set: setter }, i) => (
+                  <input
+                    key={ph}
+                    type="password"
+                    placeholder={ph}
+                    autoFocus={i === 0}
+                    value={val}
+                    onChange={e => {
+                      setter(e.target.value)
+                      setPwdError('')
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-2)',
+                      background: 'var(--bg-3)',
+                      color: 'var(--text-0)',
+                      fontSize: '13px',
+                      fontFamily: 'inherit',
+                      outline: 'none',
+                      boxSizing: 'border-box' as const,
+                    }}
+                  />
+                ))}
+                {pwdError && <div style={{ fontSize: '11px', color: '#ef4444' }}>{pwdError}</div>}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={async () => {
+                      if (s.lockPasswordHash) {
+                        const currentHash = await hashPassword(pwdCurrent)
+                        if (currentHash !== s.lockPasswordHash)
+                          return setPwdError('Contraseña actual incorrecta')
+                      }
+                      if (!pwdNew.trim())
+                        return setPwdError('La nueva contraseña no puede estar vacía')
+                      if (pwdNew !== pwdConfirm) return setPwdError('Las contraseñas no coinciden')
+                      if (pwdNew.length < 4) return setPwdError('Mínimo 4 caracteres')
+                      const hash = await hashPassword(pwdNew)
+                      set({ lockPasswordHash: hash })
+                      setPwdStep('idle')
+                      setPwdNew('')
+                      setPwdConfirm('')
+                      setPwdCurrent('')
+                      setPwdSaved(true)
+                      setTimeout(() => setPwdSaved(false), 2500)
+                    }}
+                    style={{
+                      padding: '7px 16px',
+                      borderRadius: 'var(--radius-md)',
+                      border: 'none',
+                      background: 'var(--accent-600)',
+                      color: '#fff',
+                      fontSize: '12px',
+                      fontFamily: 'inherit',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Guardar
+                  </button>
+                  <button
+                    onClick={() => setPwdStep('idle')}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-2)',
+                      background: 'transparent',
+                      color: 'var(--text-1)',
+                      fontSize: '12px',
+                      fontFamily: 'inherit',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+                {pwdSaved && (
+                  <div style={{ fontSize: '11px', color: '#34d399' }}>✓ Contraseña actualizada</div>
+                )}
+              </div>
+            )}
+
+            {/* ── Formulario: quitar contraseña ── */}
+            {pwdStep === 'remove' && (
+              <div
+                style={{
+                  background: 'var(--bg-2)',
+                  border: '1px solid rgba(239,68,68,0.25)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-0)' }}>
+                  Quitar contraseña
+                </div>
+                <p style={{ fontSize: '11px', color: 'var(--text-2)', margin: 0 }}>
+                  Confirma tu contraseña actual para desactivar el bloqueo.
+                </p>
+                <input
+                  type="password"
+                  placeholder="Contraseña actual"
+                  autoFocus
+                  value={pwdCurrent}
+                  onChange={e => {
+                    setPwdCurrent(e.target.value)
+                    setPwdError('')
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: `1px solid ${pwdError ? '#ef4444' : 'var(--border-2)'}`,
+                    background: 'var(--bg-3)',
+                    color: 'var(--text-0)',
+                    fontSize: '13px',
+                    fontFamily: 'inherit',
+                    outline: 'none',
+                    boxSizing: 'border-box' as const,
+                  }}
+                />
+                {pwdError && <div style={{ fontSize: '11px', color: '#ef4444' }}>{pwdError}</div>}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={async () => {
+                      const hash = await hashPassword(pwdCurrent)
+                      if (hash !== s.lockPasswordHash) return setPwdError('Contraseña incorrecta')
+                      set({ lockEnabled: false, lockPasswordHash: '' })
+                      clearActivity()
+                      setPwdStep('idle')
+                      setPwdCurrent('')
+                    }}
+                    style={{
+                      padding: '7px 16px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid rgba(239,68,68,0.3)',
+                      background: 'rgba(239,68,68,0.12)',
+                      color: '#ef4444',
+                      fontSize: '12px',
+                      fontFamily: 'inherit',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Eliminar contraseña
+                  </button>
+                  <button
+                    onClick={() => setPwdStep('idle')}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-2)',
+                      background: 'transparent',
+                      color: 'var(--text-1)',
+                      fontSize: '12px',
+                      fontFamily: 'inherit',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Tiempo de inactividad ── */}
+            {s.lockEnabled && (
+              <SettRow
+                label="Tiempo de inactividad"
+                hint="Bloquea automáticamente tras X minutos sin actividad. «Nunca» desactiva el auto-bloqueo."
+              >
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+                    gap: '6px',
+                  }}
+                >
+                  {[
+                    { v: 0, label: 'Nunca' },
+                    { v: 5, label: '5 min' },
+                    { v: 15, label: '15 min' },
+                    { v: 30, label: '30 min' },
+                    { v: 60, label: '1 hora' },
+                    { v: 240, label: '4 h' },
+                    { v: 480, label: '8 h' },
+                  ].map(({ v, label }) => (
+                    <button
+                      key={v}
+                      onClick={() => set({ lockTimeoutMinutes: v })}
+                      style={{
+                        padding: '7px 4px',
+                        borderRadius: 'var(--radius-md)',
+                        border: `1px solid ${(s.lockTimeoutMinutes ?? 0) === v ? 'var(--accent-600)' : 'var(--border-2)'}`,
+                        background:
+                          (s.lockTimeoutMinutes ?? 0) === v ? 'var(--accent-glow)' : 'var(--bg-2)',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        fontFamily: 'inherit',
+                        color:
+                          (s.lockTimeoutMinutes ?? 0) === v ? 'var(--accent-400)' : 'var(--text-1)',
+                        transition: 'all var(--transition-fast)',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </SettRow>
+            )}
+
+            {/* ── Bloquear al perder el foco ── */}
+            {s.lockEnabled && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '16px',
+                }}
+              >
+                <div>
+                  <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-0)' }}>
+                    Bloquear al minimizar / cambiar pestaña
+                  </span>
+                  <p style={{ fontSize: '11px', color: 'var(--text-2)', margin: '2px 0 0' }}>
+                    La app se bloquea en cuanto pierde el foco de la ventana
+                  </p>
+                </div>
+                <Toggle checked={s.lockOnHide ?? false} onChange={v => set({ lockOnHide: v })} />
+              </div>
+            )}
+          </Section>
+
+          {/* ─── GESTIÓN DE DATOS ───────────────────────────────────────────────── */}
+          <Section title="Gestión de datos">
+            {/* Descripción */}
+            <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
+              Elimina datos por categoría o reinicia la app por completo.{' '}
+              <strong style={{ color: 'var(--text-1)' }}>Estas acciones son irreversibles</strong>
+              {s.lockEnabled && s.lockPasswordHash
+                ? ' y requieren tu contraseña de seguridad.'
+                : ' y requieren confirmación.'}
+            </div>
+
+            {/* Filas por categoría */}
+            {(
+              [
+                {
+                  key: 'notes',
+                  label: 'Notas',
+                  desc: 'Todas las notas y archivos adjuntos',
+                  color: '#f97316',
+                  action: () => dispatch(setNotes([])),
+                },
+                {
+                  key: 'daily',
+                  label: 'Daily entries',
+                  desc: 'Todo el historial de dailies',
+                  color: '#60a5fa',
+                  action: () => dispatch(setEntries([])),
+                },
+                {
+                  key: 'sprints',
+                  label: 'Sprints',
+                  desc: 'Todos los sprints del daily',
+                  color: '#f472b6',
+                  action: () => dispatch(setSprints([])),
+                },
+                {
+                  key: 'impediments',
+                  label: 'Bloqueos',
+                  desc: 'Todos los impedimentos registrados',
+                  color: '#ef4444',
+                  action: () => dispatch(setImpediments([])),
+                },
+                {
+                  key: 'folders',
+                  label: 'Carpetas',
+                  desc: 'Toda la estructura de carpetas',
+                  color: '#a78bfa',
+                  action: () => dispatch(clearAllFolders()),
+                },
+              ] as const
+            ).map(({ key, label, desc, color, action }) => (
+              <div
+                key={key}
+                style={{
+                  background: 'var(--bg-2)',
+                  border: '1px solid var(--border-1)',
+                  borderLeft: `3px solid ${color}`,
+                  borderRadius: 'var(--radius-md)',
+                  padding: '10px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                {/* Cabecera de fila */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-0)' }}>
+                      {label}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-3)' }}>{desc}</div>
+                  </div>
+                  {/* Botón eliminar — sólo visible en estado idle */}
+                  {deleteAuthStep !== key && confirmReset !== key && (
+                    <>
+                      {resetDone === key ? (
+                        <span style={{ fontSize: '11px', color: '#34d399', flexShrink: 0 }}>
+                          ✓ Eliminado
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            if (s.lockEnabled && s.lockPasswordHash) {
+                              setDeleteAuthStep(key)
+                              setDeleteAuthPwd('')
+                              setDeleteAuthError('')
+                            } else {
+                              setConfirmReset(key)
+                            }
+                          }}
+                          style={{
+                            padding: '5px 12px',
+                            borderRadius: 'var(--radius-md)',
+                            border: '1px solid rgba(239,68,68,0.3)',
+                            background: 'rgba(239,68,68,0.07)',
+                            color: '#ef4444',
+                            fontSize: '11px',
+                            fontFamily: 'inherit',
+                            cursor: 'pointer',
+                            fontWeight: 500,
+                            flexShrink: 0,
+                          }}
+                        >
+                          Eliminar
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Verificación de contraseña */}
+                {deleteAuthStep === key && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      paddingTop: '8px',
+                      borderTop: '1px solid var(--border-1)',
+                    }}
+                  >
+                    <div style={{ fontSize: '11px', color: 'var(--text-2)' }}>
+                      Ingresa tu contraseña para continuar:
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <input
+                        type="password"
+                        placeholder="Contraseña"
+                        autoFocus
+                        value={deleteAuthPwd}
+                        onChange={e => {
+                          setDeleteAuthPwd(e.target.value)
+                          setDeleteAuthError('')
+                        }}
+                        onKeyDown={async e => {
+                          if (e.key !== 'Enter') return
+                          const h = await hashPassword(deleteAuthPwd)
+                          if (h !== s.lockPasswordHash)
+                            return setDeleteAuthError('Contraseña incorrecta')
+                          setDeleteAuthStep(null)
+                          setConfirmReset(key)
+                          setDeleteAuthPwd('')
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '7px 10px',
+                          borderRadius: 'var(--radius-md)',
+                          border: `1px solid ${deleteAuthError ? '#ef4444' : 'var(--border-2)'}`,
+                          background: 'var(--bg-3)',
+                          color: 'var(--text-0)',
+                          fontSize: '12px',
+                          fontFamily: 'inherit',
+                          outline: 'none',
+                          minWidth: 0,
+                        }}
+                      />
+                      <button
+                        onClick={async () => {
+                          const h = await hashPassword(deleteAuthPwd)
+                          if (h !== s.lockPasswordHash)
+                            return setDeleteAuthError('Contraseña incorrecta')
+                          setDeleteAuthStep(null)
+                          setConfirmReset(key)
+                          setDeleteAuthPwd('')
+                        }}
+                        style={{
+                          padding: '7px 12px',
+                          borderRadius: 'var(--radius-md)',
+                          border: 'none',
+                          background: 'var(--accent-600)',
+                          color: '#fff',
+                          fontSize: '12px',
+                          fontFamily: 'inherit',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          flexShrink: 0,
+                        }}
+                      >
+                        Verificar
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDeleteAuthStep(null)
+                          setDeleteAuthPwd('')
+                          setDeleteAuthError('')
+                        }}
+                        style={{
+                          padding: '7px 10px',
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid var(--border-2)',
+                          background: 'transparent',
+                          color: 'var(--text-2)',
+                          fontSize: '12px',
+                          fontFamily: 'inherit',
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {deleteAuthError && (
+                      <div style={{ fontSize: '11px', color: '#ef4444' }}>{deleteAuthError}</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Confirmación final */}
+                {confirmReset === key && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      paddingTop: '8px',
+                      borderTop: '1px solid var(--border-1)',
+                    }}
+                  >
+                    <span style={{ fontSize: '11px', color: 'var(--text-1)', flex: 1 }}>
+                      ¿Eliminar todo? Esta acción no se puede deshacer.
+                    </span>
+                    <button
+                      onClick={() => {
+                        action()
+                        setConfirmReset(null)
+                        setResetDone(key)
+                        setTimeout(() => setResetDone(null), 2500)
+                      }}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: 'var(--radius-md)',
+                        border: 'none',
+                        background: '#ef4444',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontFamily: 'inherit',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        flexShrink: 0,
+                      }}
+                    >
+                      Confirmar
+                    </button>
+                    <button
+                      onClick={() => setConfirmReset(null)}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--border-2)',
+                        background: 'transparent',
+                        color: 'var(--text-2)',
+                        fontSize: '11px',
+                        fontFamily: 'inherit',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* ── Restablecer todo ── */}
+            <div
+              style={{
+                background: 'rgba(239,68,68,0.06)',
+                border: '1px solid rgba(239,68,68,0.25)',
+                borderRadius: 'var(--radius-md)',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#ef4444' }}>
+                  Restablecer todo
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-2)', marginTop: '3px' }}>
+                  Elimina absolutamente todos los datos: notas, dailies, sprints, impedimentos y
+                  ajustes. La app volverá al estado inicial.
+                </div>
+              </div>
+
+              {/* Verificación de contraseña para reset nuclear */}
+              {deleteAuthStep === 'all-auth' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-1)' }}>
+                    Ingresa tu contraseña para continuar:
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input
+                      type="password"
+                      placeholder="Contraseña"
+                      autoFocus
+                      value={deleteAuthPwd}
+                      onChange={e => {
+                        setDeleteAuthPwd(e.target.value)
+                        setDeleteAuthError('')
+                      }}
+                      onKeyDown={async e => {
+                        if (e.key !== 'Enter') return
+                        const h = await hashPassword(deleteAuthPwd)
+                        if (h !== s.lockPasswordHash)
+                          return setDeleteAuthError('Contraseña incorrecta')
+                        setDeleteAuthStep(null)
+                        setConfirmReset('all')
+                        setDeleteAuthPwd('')
+                        setTimeout(() => confirmInputRef.current?.focus(), 100)
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '7px 10px',
+                        borderRadius: 'var(--radius-md)',
+                        border: `1px solid ${deleteAuthError ? '#ef4444' : 'var(--border-2)'}`,
+                        background: 'var(--bg-2)',
+                        color: 'var(--text-0)',
+                        fontSize: '12px',
+                        fontFamily: 'inherit',
+                        outline: 'none',
+                        minWidth: 0,
+                      }}
+                    />
+                    <button
+                      onClick={async () => {
+                        const h = await hashPassword(deleteAuthPwd)
+                        if (h !== s.lockPasswordHash)
+                          return setDeleteAuthError('Contraseña incorrecta')
+                        setDeleteAuthStep(null)
+                        setConfirmReset('all')
+                        setDeleteAuthPwd('')
+                        setTimeout(() => confirmInputRef.current?.focus(), 100)
+                      }}
+                      style={{
+                        padding: '7px 12px',
+                        borderRadius: 'var(--radius-md)',
+                        border: 'none',
+                        background: 'var(--accent-600)',
+                        color: '#fff',
+                        fontSize: '12px',
+                        fontFamily: 'inherit',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        flexShrink: 0,
+                      }}
+                    >
+                      Verificar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDeleteAuthStep(null)
+                        setDeleteAuthPwd('')
+                        setDeleteAuthError('')
+                      }}
+                      style={{
+                        padding: '7px 10px',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--border-2)',
+                        background: 'transparent',
+                        color: 'var(--text-2)',
+                        fontSize: '12px',
+                        fontFamily: 'inherit',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  {deleteAuthError && (
+                    <div style={{ fontSize: '11px', color: '#ef4444' }}>{deleteAuthError}</div>
+                  )}
+                </div>
+              )}
+
+              {confirmReset === 'all' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-1)' }}>
+                    Escribe <strong>RESTABLECER</strong> para confirmar:
+                  </div>
+                  <input
+                    ref={confirmInputRef}
+                    placeholder="RESTABLECER"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid rgba(239,68,68,0.35)',
+                      background: 'var(--bg-2)',
+                      color: 'var(--text-0)',
+                      fontSize: '13px',
+                      fontFamily: 'inherit',
+                      outline: 'none',
+                      boxSizing: 'border-box' as const,
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && confirmInputRef.current?.value === 'RESTABLECER') {
+                        dispatch(setNotes([]))
+                        dispatch(setEntries([]))
+                        dispatch(setSprints([]))
+                        dispatch(setImpediments([]))
+                        dispatch(clearAllFolders())
+                        set({ lockEnabled: false, lockPasswordHash: '' })
+                        clearActivity()
+                        setConfirmReset(null)
+                        setTimeout(() => window.location.reload(), 300)
+                      }
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      style={{
+                        padding: '7px 16px',
+                        borderRadius: 'var(--radius-md)',
+                        border: 'none',
+                        background: '#ef4444',
+                        color: '#fff',
+                        fontSize: '12px',
+                        fontFamily: 'inherit',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                      }}
+                      onClick={() => {
+                        if (confirmInputRef.current?.value !== 'RESTABLECER') return
+                        dispatch(setNotes([]))
+                        dispatch(setEntries([]))
+                        dispatch(setSprints([]))
+                        dispatch(setImpediments([]))
+                        dispatch(clearAllFolders())
+                        set({ lockEnabled: false, lockPasswordHash: '' })
+                        clearActivity()
+                        setConfirmReset(null)
+                        setTimeout(() => window.location.reload(), 300)
+                      }}
+                    >
+                      Restablecer todo
+                    </button>
+                    <button
+                      onClick={() => setConfirmReset(null)}
+                      style={{
+                        padding: '7px 14px',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--border-2)',
+                        background: 'transparent',
+                        color: 'var(--text-1)',
+                        fontSize: '12px',
+                        fontFamily: 'inherit',
+                        cursor: 'pointer',
+                        fontWeight: 500,
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                deleteAuthStep !== 'all-auth' && (
+                  <button
+                    style={{
+                      alignSelf: 'flex-start',
+                      padding: '7px 16px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid rgba(239,68,68,0.35)',
+                      background: 'rgba(239,68,68,0.14)',
+                      color: '#ef4444',
+                      fontSize: '12px',
+                      fontFamily: 'inherit',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                    }}
+                    onClick={() => {
+                      if (s.lockEnabled && s.lockPasswordHash) {
+                        setDeleteAuthStep('all-auth')
+                        setDeleteAuthPwd('')
+                        setDeleteAuthError('')
+                      } else {
+                        setConfirmReset('all')
+                        setTimeout(() => confirmInputRef.current?.focus(), 100)
+                      }
+                    }}
+                  >
+                    Restablecer app
+                  </button>
+                )
+              )}
+            </div>
           </Section>
 
           {/* About */}

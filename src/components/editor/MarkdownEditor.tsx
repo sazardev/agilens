@@ -3,6 +3,7 @@ import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { EditorView, keymap } from '@codemirror/view'
 import { defaultKeymap, historyKeymap, history } from '@codemirror/commands'
+import { Prec } from '@codemirror/state'
 import { createTheme } from '@uiw/codemirror-themes'
 import { tags as t } from '@lezer/highlight'
 import { useAppSelector } from '@/store'
@@ -56,8 +57,8 @@ const agilensThemeDark = createTheme({
     { tag: t.heading2, color: '#e8e8ec', fontWeight: '600', fontSize: '1.2em' },
     { tag: t.heading3, color: '#e0e0e4', fontWeight: '600', fontSize: '1.1em' },
     { tag: [t.heading4, t.heading5, t.heading6], color: '#d0d0d8', fontWeight: '600' },
-    { tag: t.emphasis, fontStyle: 'italic', color: '#a5b4fc' },
-    { tag: t.strong, fontWeight: '700', color: '#f0f0f4' },
+    { tag: t.emphasis, fontStyle: 'italic', color: '#c4b5fd' },
+    { tag: t.strong, fontWeight: '700', color: '#ffffff' },
     { tag: t.strikethrough, textDecoration: 'line-through', color: '#5c5c6e' },
     { tag: t.monospace, color: '#a78bfa', fontFamily: 'var(--font-mono)' },
     { tag: t.processingInstruction, color: '#818cf8' },
@@ -148,11 +149,45 @@ function makeLayoutTheme(isDark: boolean) {
 function wrapSelection(view: EditorView, before: string, after: string, placeholder = '') {
   const { state } = view
   const { from, to } = state.selection.main
-  const selected = state.sliceDoc(from, to) || placeholder
-  view.dispatch({
-    changes: { from, to, insert: before + selected + after },
-    selection: { anchor: from + before.length, head: from + before.length + selected.length },
-  })
+  const selected = state.sliceDoc(from, to)
+
+  if (selected) {
+    // Toggle: if already wrapped, unwrap
+    if (selected.startsWith(before) && selected.endsWith(after)) {
+      const unwrapped = selected.slice(before.length, selected.length - after.length)
+      view.dispatch({
+        changes: { from, to, insert: unwrapped },
+        selection: { anchor: from, head: from + unwrapped.length },
+      })
+      view.focus()
+      return
+    }
+    // Check if the surrounding characters are the markers (selection inside markers)
+    const beforeSel = state.sliceDoc(from - before.length, from)
+    const afterSel = state.sliceDoc(to, to + after.length)
+    if (beforeSel === before && afterSel === after) {
+      view.dispatch({
+        changes: [
+          { from: from - before.length, to: from, insert: '' },
+          { from: to, to: to + after.length, insert: '' },
+        ],
+        selection: { anchor: from - before.length, head: to - before.length },
+      })
+      view.focus()
+      return
+    }
+    // Wrap selection
+    view.dispatch({
+      changes: { from, to, insert: before + selected + after },
+      selection: { anchor: from + before.length, head: from + before.length + selected.length },
+    })
+  } else {
+    // No selection: insert placeholder and select it
+    view.dispatch({
+      changes: { from, to, insert: before + placeholder + after },
+      selection: { anchor: from + before.length, head: from + before.length + placeholder.length },
+    })
+  }
   view.focus()
 }
 
@@ -290,15 +325,96 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
   const activeTheme = isDark ? agilensThemeDark : agilensThemeLight
   const layoutTheme = useMemo(() => makeLayoutTheme(isDark), [isDark])
 
+  // ─── Custom format keymap — Prec.highest wins over basicSetup keymaps ───────
+  const formatKeymap = useMemo(
+    () =>
+      Prec.highest(
+        keymap.of([
+          {
+            key: 'Mod-b',
+            run(view) {
+              applyFormat(view, 'bold')
+              return true
+            },
+          },
+          {
+            key: 'Mod-i',
+            run(view) {
+              applyFormat(view, 'italic')
+              return true
+            },
+          },
+          {
+            key: 'Mod-`',
+            run(view) {
+              applyFormat(view, 'inlineCode')
+              return true
+            },
+          },
+          {
+            key: 'Mod-Shift-x',
+            run(view) {
+              applyFormat(view, 'strikethrough')
+              return true
+            },
+          },
+          {
+            key: 'Mod-1',
+            run(view) {
+              applyFormat(view, 'h1')
+              return true
+            },
+          },
+          {
+            key: 'Mod-2',
+            run(view) {
+              applyFormat(view, 'h2')
+              return true
+            },
+          },
+          {
+            key: 'Mod-3',
+            run(view) {
+              applyFormat(view, 'h3')
+              return true
+            },
+          },
+          {
+            key: 'Mod-Shift-7',
+            run(view) {
+              applyFormat(view, 'bulletList')
+              return true
+            },
+          },
+          {
+            key: 'Mod-Shift-8',
+            run(view) {
+              applyFormat(view, 'numberedList')
+              return true
+            },
+          },
+          {
+            key: 'Mod-Shift-.',
+            run(view) {
+              applyFormat(view, 'blockquote')
+              return true
+            },
+          },
+        ])
+      ),
+    []
+  )
+
   const extensions = useMemo(
     () => [
       markdown({ base: markdownLanguage }),
       layoutTheme,
       history(),
+      formatKeymap,
       keymap.of([...defaultKeymap, ...historyKeymap]),
       ...(wordWrap ? [EditorView.lineWrapping] : []),
     ],
-    [layoutTheme, wordWrap]
+    [layoutTheme, wordWrap, formatKeymap]
   )
 
   return (

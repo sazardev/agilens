@@ -25,6 +25,11 @@ export const defaultSettings: AppSettings = {
   markdownCodeHighlight: true,
   markdownTabSize: 2,
   markdownSpellcheck: false,
+  // ─── Seguridad ─────────────────────────────────────────────────────────────
+  lockEnabled: false,
+  lockPasswordHash: '',
+  lockTimeoutMinutes: 0,
+  lockOnHide: false,
 }
 
 const settingsSlice = createSlice({

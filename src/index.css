@@ -830,8 +830,15 @@ select {
   font-weight: 700;
   color: var(--text-0);
 }
+.md-prose--dark strong {
+  color: #ffffff;
+}
 .md-prose em {
   font-style: italic;
+  color: var(--accent-300, #a5b4fc);
+}
+.md-prose--light em {
+  color: var(--accent-600, #4f46e5);
 }
 .md-prose del {
   text-decoration: line-through;

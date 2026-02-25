@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import Sidebar from '@/components/layout/Sidebar'
 import StatusBar from '@/components/layout/StatusBar'
 import CommandPalette from '@/components/command/CommandPalette'
+import KeyboardShortcutsModal from '@/components/shortcuts/KeyboardShortcutsModal'
 import AgilensLogo from '@/components/layout/AgilensLogo'
 import { useAppDispatch, useAppSelector } from '@/store'
 import { toggleSidebar } from '@/store/slices/uiSlice'
@@ -31,13 +32,25 @@ export default function MainLayout() {
   const sidebarAutoHide = useAppSelector(s => s.ui.sidebarAutoHide)
   const [isMobile, setIsMobile] = useState(false)
   const [cmdOpen, setCmdOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
-  // Global Ctrl+K listener
+  // Global Ctrl+K / ? / F1 listeners
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName
+      const inInput =
+        tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable
+
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault()
         setCmdOpen(prev => !prev)
+        return
+      }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && !inInput) {
+        if (e.key === '?' || e.key === 'F1') {
+          e.preventDefault()
+          setShortcutsOpen(prev => !prev)
+        }
       }
     }
     window.addEventListener('keydown', handler)
@@ -119,6 +132,7 @@ export default function MainLayout() {
       </div>
       <StatusBar />
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
+      {shortcutsOpen && <KeyboardShortcutsModal onClose={() => setShortcutsOpen(false)} />}
     </div>
   )
 }

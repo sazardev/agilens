@@ -43,6 +43,22 @@ const impedimentsSlice = createSlice({
         imp.linkedEntryIds = imp.linkedEntryIds.filter(id => id !== action.payload.entryId)
       }
     },
+    /** Link a note (task) to an impediment */
+    linkNote(state, action: PayloadAction<{ impedimentId: string; noteId: string }>) {
+      const imp = state.impediments.find(i => i.id === action.payload.impedimentId)
+      if (imp) {
+        imp.linkedNoteIds = imp.linkedNoteIds ?? []
+        if (!imp.linkedNoteIds.includes(action.payload.noteId)) {
+          imp.linkedNoteIds.push(action.payload.noteId)
+        }
+      }
+    },
+    unlinkNote(state, action: PayloadAction<{ impedimentId: string; noteId: string }>) {
+      const imp = state.impediments.find(i => i.id === action.payload.impedimentId)
+      if (imp && imp.linkedNoteIds) {
+        imp.linkedNoteIds = imp.linkedNoteIds.filter(id => id !== action.payload.noteId)
+      }
+    },
   },
 })
 
@@ -53,6 +69,8 @@ export const {
   setImpediments,
   linkEntry,
   unlinkEntry,
+  linkNote,
+  unlinkNote,
 } = impedimentsSlice.actions
 
 export default impedimentsSlice.reducer

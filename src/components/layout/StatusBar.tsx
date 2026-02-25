@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useAppDispatch, useAppSelector } from '@/store'
 import { updateNote } from '@/store/slices/notesSlice'
 import { GIT_DIR } from '@/store/slices/gitSlice'
@@ -303,7 +303,7 @@ function DiffModal({
                   })
 
                   // ── 3. Build ordered list: rows or separator placeholders ────
-                  const rows: JSX.Element[] = []
+                  const rows: ReactElement[] = []
                   let prev = -1
 
                   Array.from(visible)

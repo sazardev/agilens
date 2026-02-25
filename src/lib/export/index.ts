@@ -111,14 +111,27 @@ function buildPrintDocument(title: string, bodyHtml: string, cssVars = ''): stri
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" rel="stylesheet" />
     <style>
-      /* ── Injected theme vars ─────────────────────────────────────── */
+      /* ── Theme vars ──────────────────────────────────────────────── */
       :root {
+        /* Fallback defaults — overridden by live theme vars below */
+        --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+        --font-mono: 'Fira Code', 'Cascadia Code', monospace;
+        --font-prose: var(--font-ui);
+        --radius-xs: 2px; --radius-sm: 3px; --radius-md: 4px;
+        --radius-lg: 6px; --radius-xl: 8px;
+        --accent-400: #818cf8;
+        --accent-500: #6366f1;
+        --accent-600: #4f46e5;
+        --accent-700: #4338ca;
+        --accent-glow: rgba(99,102,241,0.15);
+        --accent-glow-strong: rgba(99,102,241,0.22);
+        /* Live theme vars injected from the app (override defaults above) */
 ${cssVars}
-        /* Print-safe overrides — always white background */
+        /* Print-safe overrides — always white/light background */
         --bg-0: #ffffff;
         --bg-1: #ffffff;
         --bg-2: #f6f6f8;
-        --bg-3: #eeeeF2;
+        --bg-3: #eeeef2;
         --bg-4: #e4e4ec;
         --bg-5: #d8d8e4;
         --border-0: #e8e8f0;
@@ -129,10 +142,6 @@ ${cssVars}
         --text-1: #4a4a5a;
         --text-2: #787890;
         --text-3: #a8a8bc;
-        --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
-        --font-mono: 'Fira Code', 'Cascadia Code', monospace;
-        --radius-xs: 2px; --radius-sm: 3px; --radius-md: 4px;
-        --radius-lg: 6px; --radius-xl: 8px;
       }
 
       /* ── Reset ───────────────────────────────────────────────────── */
@@ -173,6 +182,7 @@ ${cssVars}
       /* ── Prose ───────────────────────────────────────────────────── */
       .md-prose {
         color: var(--text-0);
+        font-family: var(--font-prose);
         line-height: 1.75;
         word-break: break-word;
         overflow-wrap: break-word;
@@ -199,8 +209,8 @@ ${cssVars}
 
       .md-prose p { margin: 0.9em 0; }
       .md-prose p:first-child { margin-top: 0; }
-      .md-prose strong { font-weight: 700; }
-      .md-prose em { font-style: italic; }
+      .md-prose strong { font-weight: 700; color: var(--text-0); }
+      .md-prose em { font-style: italic; color: var(--accent-400); }
       .md-prose del { text-decoration: line-through; color: var(--text-3); }
 
       /* Inline code */

@@ -3,6 +3,7 @@
  * Drag-and-drop nativo, filtro por sprint/etiqueta, creación rápida.
  */
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { nanoid } from 'nanoid'
 import { useAppSelector, useAppDispatch } from '@/store'
@@ -112,8 +113,8 @@ const IcoChevron = ({ open }: { open: boolean }) => (
 // ─── Quick-add popover inside a column ───────────────────────────────────────
 
 function QuickAdd({
-  status,
-  sprintId,
+  status: _status,
+  sprintId: _sprintId,
   onAdd,
   onClose,
 }: {
@@ -333,8 +334,6 @@ function TaskCard({
   onAssignSprint: (sprintId: string | null) => void
   onClick: () => void
 }) {
-  const meta = KANBAN_STATUS_META[note.kanbanStatus ?? 'backlog']
-
   return (
     <div
       draggable
@@ -504,26 +503,139 @@ function TaskCard({
 function PriorityPicker({ noteId, current }: { noteId: string; current?: TaskPriority }) {
   const dispatch = useAppDispatch()
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
     function handle(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node) &&
+        btnRef.current &&
+        !btnRef.current.contains(e.target as Node)
+      )
+        setOpen(false)
     }
     document.addEventListener('mousedown', handle)
     return () => document.removeEventListener('mousedown', handle)
   }, [open])
 
+  function handleOpen(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (open) {
+      setOpen(false)
+      return
+    }
+    const rect = btnRef.current!.getBoundingClientRect()
+    setMenuPos({ top: rect.top - 4, left: rect.left })
+    setOpen(true)
+  }
+
   const meta = current ? TASK_PRIORITY_META[current] : null
 
+  const dropdown =
+    open && menuPos
+      ? createPortal(
+          <div
+            ref={menuRef}
+            style={{
+              position: 'fixed',
+              top: menuPos.top,
+              left: menuPos.left,
+              transform: 'translateY(-100%)',
+              zIndex: 9999,
+              background: 'var(--bg-2)',
+              border: '1px solid var(--border-1)',
+              borderRadius: '8px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+              padding: '4px',
+              minWidth: '130px',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {(['critical', 'high', 'medium', 'low'] as TaskPriority[]).map(p => {
+              const pm = TASK_PRIORITY_META[p]
+              return (
+                <button
+                  key={p}
+                  onClick={() => {
+                    dispatch(setNotePriority({ id: noteId, priority: p }))
+                    setOpen(false)
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    padding: '6px 8px',
+                    borderRadius: '5px',
+                    border: 'none',
+                    background: current === p ? pm.bg : 'transparent',
+                    color: pm.color,
+                    fontFamily: 'var(--font-ui)',
+                    fontSize: '12px',
+                    fontWeight: current === p ? 700 : 500,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = pm.bg)}
+                  onMouseLeave={e =>
+                    (e.currentTarget.style.background = current === p ? pm.bg : 'transparent')
+                  }
+                >
+                  <span
+                    style={{
+                      width: '7px',
+                      height: '7px',
+                      borderRadius: '50%',
+                      background: pm.color,
+                      flexShrink: 0,
+                    }}
+                  />
+                  {pm.label}
+                </button>
+              )
+            })}
+            {current && (
+              <>
+                <div style={{ height: '1px', background: 'var(--border-1)', margin: '3px 4px' }} />
+                <button
+                  onClick={() => {
+                    dispatch(setNotePriority({ id: noteId, priority: undefined }))
+                    setOpen(false)
+                  }}
+                  style={{
+                    display: 'flex',
+                    width: '100%',
+                    padding: '6px 8px',
+                    borderRadius: '5px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--text-3)',
+                    fontFamily: 'var(--font-ui)',
+                    fontSize: '11px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-3)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  Quitar prioridad
+                </button>
+              </>
+            )}
+          </div>,
+          document.body
+        )
+      : null
+
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <>
       <button
-        onClick={e => {
-          e.stopPropagation()
-          setOpen(o => !o)
-        }}
+        ref={btnRef}
+        onClick={handleOpen}
         title="Prioridad"
         style={{
           display: 'flex',
@@ -543,97 +655,8 @@ function PriorityPicker({ noteId, current }: { noteId: string; current?: TaskPri
       >
         {meta ? meta.label : 'Prioridad'}
       </button>
-
-      {open && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 'calc(100% + 4px)',
-            left: 0,
-            zIndex: 200,
-            background: 'var(--bg-2)',
-            border: '1px solid var(--border-1)',
-            borderRadius: '8px',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-            padding: '4px',
-            minWidth: '120px',
-          }}
-          onClick={e => e.stopPropagation()}
-        >
-          {(['critical', 'high', 'medium', 'low'] as TaskPriority[]).map(p => {
-            const pm = TASK_PRIORITY_META[p]
-            return (
-              <button
-                key={p}
-                onClick={() => {
-                  dispatch(setNotePriority({ id: noteId, priority: p }))
-                  setOpen(false)
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  width: '100%',
-                  padding: '6px 8px',
-                  borderRadius: '5px',
-                  border: 'none',
-                  background: current === p ? pm.bg : 'transparent',
-                  color: pm.color,
-                  fontFamily: 'var(--font-ui)',
-                  fontSize: '12px',
-                  fontWeight: current === p ? 700 : 500,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = pm.bg)}
-                onMouseLeave={e =>
-                  (e.currentTarget.style.background = current === p ? pm.bg : 'transparent')
-                }
-              >
-                <span
-                  style={{
-                    width: '7px',
-                    height: '7px',
-                    borderRadius: '50%',
-                    background: pm.color,
-                    flexShrink: 0,
-                  }}
-                />
-                {pm.label}
-              </button>
-            )
-          })}
-          {current && (
-            <>
-              <div style={{ height: '1px', background: 'var(--border-1)', margin: '3px 4px' }} />
-              <button
-                onClick={() => {
-                  dispatch(setNotePriority({ id: noteId, priority: undefined }))
-                  setOpen(false)
-                }}
-                style={{
-                  display: 'flex',
-                  width: '100%',
-                  padding: '6px 8px',
-                  borderRadius: '5px',
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'var(--text-3)',
-                  fontFamily: 'var(--font-ui)',
-                  fontSize: '11px',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-3)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              >
-                Quitar prioridad
-              </button>
-            </>
-          )}
-        </div>
-      )}
-    </div>
+      {dropdown}
+    </>
   )
 }
 

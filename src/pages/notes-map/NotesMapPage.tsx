@@ -78,11 +78,22 @@ const IMP_COLORS: Record<string, string> = {
 
 // ─── Force simulation constants ───────────────────────────────────────────────
 
-const REPULSION = 4000
-const SPRING_LENGTH = 120
-const SPRING_K = 0.06
-const GRAVITY = 0.015
-const DAMPING = 0.82
+const DEFAULT_PHYSICS = {
+  repulsion: 4000,
+  springLength: 120,
+  springK: 0.06,
+  gravity: 0.015,
+  damping: 0.82,
+}
+
+interface PhysicsParams {
+  repulsion: number
+  springLength: number
+  springK: number
+  gravity: number
+  damping: number
+}
+
 const MAX_VELOCITY = 14
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -382,7 +393,14 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
 
 // ─── Force simulation step ────────────────────────────────────────────────────
 
-function simulationStep(nodes: GNode[], edges: GEdge[], cx: number, cy: number) {
+function simulationStep(
+  nodes: GNode[],
+  edges: GEdge[],
+  cx: number,
+  cy: number,
+  params: PhysicsParams = DEFAULT_PHYSICS
+) {
+  const { repulsion, springLength, springK, gravity, damping } = params
   const n = nodes.length
 
   // Repulsion
@@ -394,7 +412,7 @@ function simulationStep(nodes: GNode[], edges: GEdge[], cx: number, cy: number) 
       const dy = b.y - a.y
       const d2 = dx * dx + dy * dy + 0.01
       const d = Math.sqrt(d2)
-      const f = REPULSION / d2
+      const f = repulsion / d2
       const fx = (dx / d) * f
       const fy = (dy / d) * f
       a.vx -= fx / a.mass
@@ -413,9 +431,9 @@ function simulationStep(nodes: GNode[], edges: GEdge[], cx: number, cy: number) 
     const dx = b.x - a.x
     const dy = b.y - a.y
     const d = Math.sqrt(dx * dx + dy * dy) + 0.01
-    const stretch = d - SPRING_LENGTH
-    const fx = (dx / d) * stretch * SPRING_K
-    const fy = (dy / d) * stretch * SPRING_K
+    const stretch = d - springLength
+    const fx = (dx / d) * stretch * springK
+    const fy = (dy / d) * stretch * springK
     if (!a.pinned) {
       a.vx += fx
       a.vy += fy
@@ -429,15 +447,15 @@ function simulationStep(nodes: GNode[], edges: GEdge[], cx: number, cy: number) 
   // Center gravity
   for (const node of nodes) {
     if (node.pinned) continue
-    node.vx += (cx - node.x) * GRAVITY
-    node.vy += (cy - node.y) * GRAVITY
+    node.vx += (cx - node.x) * gravity
+    node.vy += (cy - node.y) * gravity
   }
 
   // Integrate
   for (const node of nodes) {
     if (node.pinned) continue
-    node.vx *= DAMPING
-    node.vy *= DAMPING
+    node.vx *= damping
+    node.vy *= damping
     const spd = Math.sqrt(node.vx * node.vx + node.vy * node.vy)
     if (spd > MAX_VELOCITY) {
       node.vx = (node.vx / spd) * MAX_VELOCITY
@@ -1427,6 +1445,172 @@ const chipStyle: React.CSSProperties = {
   transition: 'border-color 0.12s, color 0.12s, background 0.12s',
 }
 
+// ─── Physics panel ──────────────────────────────────────────────────────────
+
+function PhysicsPanel({
+  params,
+  onChange,
+  onRestart,
+}: {
+  params: PhysicsParams
+  onChange: (p: PhysicsParams) => void
+  onRestart: () => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  function set(key: keyof PhysicsParams, val: number) {
+    onChange({ ...params, [key]: val })
+    onRestart()
+  }
+
+  function reset() {
+    onChange({ ...DEFAULT_PHYSICS })
+    onRestart()
+  }
+
+  const sliders: Array<{
+    key: keyof PhysicsParams
+    label: string
+    min: number
+    max: number
+    step: number
+    fmt: (v: number) => string
+  }> = [
+    { key: 'repulsion', label: 'Repulsión', min: 200, max: 12000, step: 100, fmt: v => String(v) },
+    { key: 'springLength', label: 'Long. enlace', min: 30, max: 400, step: 5, fmt: v => `${v}px` },
+    {
+      key: 'springK',
+      label: 'Fuerza enlace',
+      min: 0.005,
+      max: 0.3,
+      step: 0.005,
+      fmt: v => v.toFixed(3),
+    },
+    { key: 'gravity', label: 'Gravedad', min: 0, max: 0.08, step: 0.001, fmt: v => v.toFixed(3) },
+    {
+      key: 'damping',
+      label: 'Amortiguación',
+      min: 0.5,
+      max: 0.99,
+      step: 0.01,
+      fmt: v => v.toFixed(2),
+    },
+  ]
+
+  if (!open) {
+    return (
+      <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 20 }}>
+        <button
+          onClick={() => setOpen(true)}
+          title="Controles de física"
+          style={{
+            ...btnStyle,
+            gap: 5,
+            background: 'var(--bg-1)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          }}
+        >
+          <svg
+            width="13"
+            height="13"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            viewBox="0 0 24 24"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <line x1="12" y1="2" x2="12" y2="6" />
+            <line x1="12" y1="18" x2="12" y2="22" />
+            <line x1="2" y1="12" x2="6" y2="12" />
+            <line x1="18" y1="12" x2="22" y2="12" />
+          </svg>
+          Física
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        zIndex: 20,
+        background: 'var(--bg-1)',
+        border: '1px solid var(--border-1)',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+        width: 230,
+        overflow: 'hidden',
+        fontSize: 12,
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '9px 12px',
+          borderBottom: '1px solid var(--border-1)',
+          background: 'var(--bg-2)',
+        }}
+      >
+        <span style={{ fontWeight: 600, color: 'var(--text-0)', letterSpacing: '0.02em' }}>
+          Física del grafo
+        </span>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button
+            onClick={reset}
+            title="Restablecer valores"
+            style={{
+              ...ghostBtnStyle,
+              fontSize: 10,
+              padding: '2px 6px',
+              color: 'var(--accent-400)',
+            }}
+          >
+            Restablecer
+          </button>
+          <button onClick={() => setOpen(false)} style={ghostBtnStyle} title="Cerrar">
+            <IcoX />
+          </button>
+        </div>
+      </div>
+
+      {/* Sliders */}
+      <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {sliders.map(s => (
+          <div key={s.key}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+              <span style={{ color: 'var(--text-1)' }}>{s.label}</span>
+              <span
+                style={{
+                  color: 'var(--accent-400)',
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 600,
+                }}
+              >
+                {s.fmt(params[s.key])}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={s.min}
+              max={s.max}
+              step={s.step}
+              value={params[s.key]}
+              onChange={e => set(s.key, parseFloat(e.target.value))}
+              style={{ width: '100%', accentColor: 'var(--accent-500)', cursor: 'pointer' }}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function NotesMapPage() {
@@ -1450,6 +1634,13 @@ export default function NotesMapPage() {
   const [linkSprint, setLinkSprint] = useState(true)
   const [linkDaily, setLinkDaily] = useState(true)
   const [linkImpediment, setLinkImpediment] = useState(true)
+
+  // ── Physics state ──
+  const [physics, setPhysics] = useState<PhysicsParams>({ ...DEFAULT_PHYSICS })
+  const physicsRef = useRef<PhysicsParams>(physics)
+  useEffect(() => {
+    physicsRef.current = physics
+  }, [physics])
 
   // ── Canvas / interaction state ──
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -1539,7 +1730,7 @@ export default function NotesMapPage() {
 
       // Sim step
       if (simRunning.current) {
-        simulationStep(nodesRef.current, edgesRef.current, w / 2, h / 2)
+        simulationStep(nodesRef.current, edgesRef.current, w / 2, h / 2, physicsRef.current)
         // Stop sim when velocity is low
         const maxV = nodesRef.current.reduce(
           (m, n) => Math.max(m, Math.abs(n.vx) + Math.abs(n.vy)),
@@ -1867,6 +2058,15 @@ export default function NotesMapPage() {
           Click para seleccionar · Doble click para abrir · Arrastrar para mover
         </div>
       </div>
+
+      {/* Physics panel */}
+      <PhysicsPanel
+        params={physics}
+        onChange={setPhysics}
+        onRestart={() => {
+          simRunning.current = true
+        }}
+      />
 
       {/* Filter panel */}
       <FilterPanel

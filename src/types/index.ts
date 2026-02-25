@@ -148,6 +148,7 @@ export interface Impediment {
   resolvedAt?: string // YYYY-MM-DD
   notes?: string // notas libres
   linkedEntryIds?: string[] // daily entries relacionados
+  linkedNoteIds?: string[] // notas/tareas relacionadas
 }
 
 // ─── Git ───────────────────────────────────────────────────────────────────────
@@ -234,6 +235,11 @@ export interface AppSettings {
   markdownCodeHighlight: boolean
   markdownTabSize: 2 | 4
   markdownSpellcheck: boolean
+  // ─── Seguridad ────────────────────────────────────────────────────────────
+  lockEnabled: boolean
+  lockPasswordHash: string // SHA-256 hex del PIN/contraseña
+  lockTimeoutMinutes: number // 0 = nunca, >0 = inactividad en minutos
+  lockOnHide: boolean // bloquear cuando la pestaña pierde el foco
 }
 
 // ─── UI ────────────────────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ import {
   updateSprint,
 } from '@/store/slices/dailySlice'
 import { addNote } from '@/store/slices/notesSlice'
+import { addImpediment } from '@/store/slices/impedimentsSlice'
 import { setActiveNoteId } from '@/store/slices/uiSlice'
 import type { DailyEntry, Sprint, Note } from '@/types'
 
@@ -615,6 +616,19 @@ export default function DailyPage() {
     const e = getOrCreate()
     const current = (e[key] as string[] | undefined) ?? []
     updateField({ [key]: [...current, value] })
+    // Registrar automáticamente en el log de impedimentos
+    if (key === 'blocked') {
+      dispatch(
+        addImpediment({
+          id: nanoid(),
+          title: value,
+          status: 'open',
+          severity: 'medium',
+          openedAt: currentDate,
+          linkedEntryIds: [e.id],
+        })
+      )
+    }
   }
 
   function removeItem(key: SectionKey, i: number) {

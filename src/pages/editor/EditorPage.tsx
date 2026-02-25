@@ -229,6 +229,7 @@ export default function EditorPage() {
 
   // Focus / zen mode from Redux
   const focusMode = useAppSelector(s => s.ui.focusMode)
+  const markdownPreviewFont = useAppSelector(s => s.settings.markdownPreviewFont ?? 'sans')
 
   // All tags across every note, deduplicated and sorted
   const allExistingTags = Array.from(new Set(allNotes.flatMap(n => n.tags))).sort()
@@ -524,10 +525,21 @@ export default function EditorPage() {
       .map(v => `  ${v}: ${rootCss.getPropertyValue(v).trim() || 'inherit'};`)
       .join('\n')
 
+    // Compute the prose font family from the markdownPreviewFont setting
+    const fontUI = rootCss.getPropertyValue('--font-ui').trim() || "'Inter', system-ui, sans-serif"
+    const fontMono = rootCss.getPropertyValue('--font-mono').trim() || "'Fira Code', monospace"
+    const proseFontMap: Record<string, string> = {
+      sans: fontUI,
+      serif: 'Georgia, "Times New Roman", serif',
+      mono: fontMono,
+    }
+    const proseFontFamily = proseFontMap[markdownPreviewFont] ?? fontUI
+    const finalCssVars = cssVars + `\n  --font-prose: ${proseFontFamily};`
+
     // Open popup synchronously (before any await) so browser doesn't block it
     const win = window.open('', '_blank')
     try {
-      printNote(note, capturedHtml, win, cssVars)
+      printNote(note, capturedHtml, win, finalCssVars)
     } catch (err) {
       console.error('[print]', err)
     }
