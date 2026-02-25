@@ -24,6 +24,7 @@ import { setActiveNoteId } from '@/store/slices/uiSlice'
 import type { Note, KanbanStatus, TaskPriority } from '@/types'
 import { KANBAN_STATUS_META, TASK_PRIORITY_META } from '@/types'
 import NoteRelationPicker from '@/components/editor/NoteRelationPicker'
+import ProjectPicker from '@/components/projects/ProjectPicker'
 
 // Helpers
 
@@ -65,8 +66,9 @@ function parseGherkin(raw: string): GherkinScenario[] {
       current = { name: scenarioMatch[1].trim(), steps: [] }
       continue
     }
-    const stepMatch =
-      /^(Given|Dado que|When|Cuando|Then|Entonces|And|Y|But|Pero)\s+(.+)/i.exec(line)
+    const stepMatch = /^(Given|Dado que|When|Cuando|Then|Entonces|And|Y|But|Pero)\s+(.+)/i.exec(
+      line
+    )
     if (stepMatch && current) {
       const kw = stepMatch[1].toLowerCase()
       let keyword: GherkinStep['keyword'] = 'Given'
@@ -102,8 +104,7 @@ interface TaskFormState {
   difficulty: number
   timeEstimate: string
   sprintId: string
-  projectId: string
-  repoRef: string
+  projectIds: string[]
   dependencies: { id: string; title: string }[]
   criteria: string[]
   scenarios: GherkinScenario[]
@@ -121,8 +122,7 @@ const DEFAULT_FORM: TaskFormState = {
   difficulty: 0,
   timeEstimate: '',
   sprintId: '',
-  projectId: '',
-  repoRef: '',
+  projectIds: [],
   dependencies: [],
   criteria: [''],
   scenarios: [],
@@ -368,13 +368,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 // Tag input
 
-function TagInput({
-  value,
-  onChange,
-}: {
-  value: string[]
-  onChange: (tags: string[]) => void
-}) {
+function TagInput({ value, onChange }: { value: string[]; onChange: (tags: string[]) => void }) {
   const [input, setInput] = useState('')
 
   function addTag(raw: string) {
@@ -435,7 +429,14 @@ function TagInput({
               opacity: 0.7,
             }}
           >
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg
+              width="9"
+              height="9"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -641,7 +642,13 @@ function ScenarioCard({
         />
         <button
           onClick={onRemove}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', display: 'flex' }}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--text-3)',
+            display: 'flex',
+          }}
         >
           <IcoX />
         </button>
@@ -666,7 +673,9 @@ function ScenarioCard({
               }}
             >
               {KEYWORDS.map(k => (
-                <option key={k} value={k}>{k}</option>
+                <option key={k} value={k}>
+                  {k}
+                </option>
               ))}
             </select>
             <input
@@ -687,9 +696,23 @@ function ScenarioCard({
             />
             <button
               onClick={() => removeStep(idx)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', display: 'flex', padding: '2px' }}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text-3)',
+                display: 'flex',
+                padding: '2px',
+              }}
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
@@ -699,7 +722,13 @@ function ScenarioCard({
         <button
           className="btn btn-ghost btn-sm"
           onClick={addStep}
-          style={{ alignSelf: 'flex-start', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}
+          style={{
+            alignSelf: 'flex-start',
+            marginTop: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+          }}
         >
           <IcoPlus /> Paso
         </button>
@@ -733,7 +762,11 @@ export default function TaskPage() {
   // Resizable split (mismo patron que DailyPage)
   const SPLIT_KEY = 'agilens_tasks_split'
   const [splitPct, setSplitPct] = useState<number>(() => {
-    try { return Number(localStorage.getItem(SPLIT_KEY)) || 48 } catch { return 48 }
+    try {
+      return Number(localStorage.getItem(SPLIT_KEY)) || 48
+    } catch {
+      return 48
+    }
   })
   const containerRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
@@ -749,7 +782,11 @@ export default function TaskPage() {
       const rect = el.getBoundingClientRect()
       const pct = Math.min(Math.max(((ev.clientX - rect.left) / rect.width) * 100, 28), 72)
       setSplitPct(pct)
-      try { localStorage.setItem(SPLIT_KEY, String(pct)) } catch { /* noop */ }
+      try {
+        localStorage.setItem(SPLIT_KEY, String(pct))
+      } catch {
+        /* noop */
+      }
     }
     const onUp = () => {
       draggingRef.current = false
@@ -774,11 +811,11 @@ export default function TaskPage() {
     setForm(f => ({ ...f, [k]: v }))
   }
 
-  const selectedProject = useMemo(
-    () => projects.find(p => p.id === form.projectId),
-    [projects, form.projectId]
+  const selectedProjects = useMemo(
+    () =>
+      form.projectIds.map(id => projects.find(p => p.id === id)).filter(Boolean) as typeof projects,
+    [projects, form.projectIds]
   )
-  const repos = useMemo(() => selectedProject?.repoFullNames ?? [], [selectedProject])
 
   const mdContent = useMemo(() => buildMarkdownContent(form, tags), [form, tags])
 
@@ -792,21 +829,23 @@ export default function TaskPage() {
     ]
     if (form.storyPoints != null) metaLines.push(`**Puntos:** ${form.storyPoints}`)
     if (form.difficulty > 0)
-      metaLines.push(`**Dificultad:** ${form.difficulty}/5 -- ${DIFFICULTY_LABELS[form.difficulty]}`)
+      metaLines.push(
+        `**Dificultad:** ${form.difficulty}/5 -- ${DIFFICULTY_LABELS[form.difficulty]}`
+      )
     if (form.timeEstimate) metaLines.push(`**Estimacion:** ${form.timeEstimate}`)
     if (form.sprintId) {
       const s = sprints.find(x => x.id === form.sprintId)
       if (s) metaLines.push(`**Sprint:** ${s.name}`)
     }
-    if (selectedProject) metaLines.push(`**Proyecto:** ${selectedProject.name}`)
-    if (form.repoRef) metaLines.push(`**Repo:** \`${form.repoRef}\``)
+    if (selectedProjects.length > 0)
+      metaLines.push(`**Proyecto:** ${selectedProjects.map(p => p.name).join(', ')}`)
 
     const title = form.title.trim() || 'Sin titulo'
     const meta = metaLines.join('  \n')
     const body = mdContent || '*Sin contenido aun.*'
 
     return `# ${title}\n\n${meta}\n\n---\n\n${body}`
-  }, [form, tags, mdContent, sprints, selectedProject])
+  }, [form, tags, mdContent, sprints, selectedProjects])
 
   function handleGherkinImport() {
     const parsed = parseGherkin(form.gherkinRaw)
@@ -825,8 +864,8 @@ export default function TaskPage() {
       tags,
       noteType: 'task',
       sprintId: form.sprintId || undefined,
-      projectId: form.projectId || undefined,
-      projectIds: form.projectId ? [form.projectId] : [],
+      projectId: form.projectIds[0] || undefined,
+      projectIds: form.projectIds,
       createdAt: now,
       updatedAt: now,
       attachments: [],
@@ -894,7 +933,14 @@ export default function TaskPage() {
             </div>
 
             {savedFlash && (
-              <span style={{ fontSize: '11px', color: '#4ade80', fontFamily: 'var(--font-mono)', paddingRight: '4px' }}>
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: '#4ade80',
+                  fontFamily: 'var(--font-mono)',
+                  paddingRight: '4px',
+                }}
+              >
                 guardado
               </span>
             )}
@@ -903,7 +949,13 @@ export default function TaskPage() {
               className="btn btn-ghost btn-sm"
               onClick={() => setShowPreview(p => !p)}
               title={showPreview ? 'Ocultar vista previa' : 'Mostrar vista previa'}
-              style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0, color: showPreview ? 'var(--accent-400)' : undefined }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                flexShrink: 0,
+                color: showPreview ? 'var(--accent-400)' : undefined,
+              }}
             >
               <IcoPreview />
               Vista previa
@@ -913,7 +965,14 @@ export default function TaskPage() {
               className="btn btn-primary"
               onClick={handleSave}
               disabled={!form.title.trim()}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', borderRadius: 'var(--radius-md)', flexShrink: 0, opacity: form.title.trim() ? 1 : 0.45 }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderRadius: 'var(--radius-md)',
+                flexShrink: 0,
+                opacity: form.title.trim() ? 1 : 0.45,
+              }}
             >
               <IcoSave />
               Crear Tarea
@@ -1009,7 +1068,12 @@ export default function TaskPage() {
           {/* Estimacion */}
           <div style={CARD}>
             <CardHeader
-              icon={Ico(<><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>)}
+              icon={Ico(
+                <>
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </>
+              )}
               label="Estimacion"
             />
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '22px' }}>
@@ -1020,14 +1084,20 @@ export default function TaskPage() {
                     onClick={() => upd('storyPoints', null)}
                     title="Sin estimar"
                     style={{
-                      width: 30, height: 30, borderRadius: '6px',
+                      width: 30,
+                      height: 30,
+                      borderRadius: '6px',
                       border: '1px solid var(--border-1)',
                       background: form.storyPoints === null ? 'var(--bg-1)' : 'transparent',
-                      color: 'var(--text-3)', fontSize: '11px',
+                      color: 'var(--text-3)',
+                      fontSize: '11px',
                       fontWeight: form.storyPoints === null ? 700 : 400,
-                      cursor: 'pointer', fontFamily: 'var(--font-mono)',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-mono)',
                     }}
-                  >?</button>
+                  >
+                    ?
+                  </button>
                   {FIBONACCI.map(n => {
                     const active = form.storyPoints === n
                     return (
@@ -1035,14 +1105,22 @@ export default function TaskPage() {
                         key={n}
                         onClick={() => upd('storyPoints', n)}
                         style={{
-                          width: 30, height: 30, borderRadius: '6px',
-                          border: '1px solid', borderColor: active ? 'var(--accent-500)' : 'var(--border-1)',
+                          width: 30,
+                          height: 30,
+                          borderRadius: '6px',
+                          border: '1px solid',
+                          borderColor: active ? 'var(--accent-500)' : 'var(--border-1)',
                           background: active ? 'var(--accent-glow)' : 'transparent',
                           color: active ? 'var(--accent-400)' : 'var(--text-2)',
-                          fontSize: '12px', fontWeight: active ? 700 : 400,
-                          cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'var(--font-mono)',
+                          fontSize: '12px',
+                          fontWeight: active ? 700 : 400,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                          fontFamily: 'var(--font-mono)',
                         }}
-                      >{n}</button>
+                      >
+                        {n}
+                      </button>
                     )
                   })}
                 </div>
@@ -1058,18 +1136,33 @@ export default function TaskPage() {
                         onClick={() => upd('difficulty', form.difficulty === d ? 0 : d)}
                         title={DIFFICULTY_LABELS[d]}
                         style={{
-                          width: 30, height: 30, borderRadius: '6px',
-                          border: '1px solid', borderColor: active ? DIFFICULTY_COLORS[d] : 'var(--border-1)',
+                          width: 30,
+                          height: 30,
+                          borderRadius: '6px',
+                          border: '1px solid',
+                          borderColor: active ? DIFFICULTY_COLORS[d] : 'var(--border-1)',
                           background: active ? `${DIFFICULTY_COLORS[d]}18` : 'transparent',
                           color: active ? DIFFICULTY_COLORS[d] : 'var(--text-2)',
-                          fontSize: '12px', fontWeight: active ? 700 : 400,
-                          cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'var(--font-mono)',
+                          fontSize: '12px',
+                          fontWeight: active ? 700 : 400,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                          fontFamily: 'var(--font-mono)',
                         }}
-                      >{d}</button>
+                      >
+                        {d}
+                      </button>
                     )
                   })}
                   {form.difficulty > 0 && (
-                    <span style={{ fontSize: '11px', color: DIFFICULTY_COLORS[form.difficulty], fontFamily: 'var(--font-mono)', marginLeft: '4px' }}>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        color: DIFFICULTY_COLORS[form.difficulty],
+                        fontFamily: 'var(--font-mono)',
+                        marginLeft: '4px',
+                      }}
+                    >
                       {DIFFICULTY_LABELS[form.difficulty]}
                     </span>
                   )}
@@ -1091,7 +1184,16 @@ export default function TaskPage() {
           {/* Contexto */}
           <div style={CARD}>
             <CardHeader
-              icon={Ico(<><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></>)}
+              icon={Ico(
+                <>
+                  <line x1="8" y1="6" x2="21" y2="6" />
+                  <line x1="8" y1="12" x2="21" y2="12" />
+                  <line x1="8" y1="18" x2="21" y2="18" />
+                  <line x1="3" y1="6" x2="3.01" y2="6" />
+                  <line x1="3" y1="12" x2="3.01" y2="12" />
+                  <line x1="3" y1="18" x2="3.01" y2="18" />
+                </>
+              )}
               label="Contexto"
             />
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
@@ -1105,48 +1207,40 @@ export default function TaskPage() {
                         key={s.id}
                         onClick={() => upd('sprintId', form.sprintId === s.id ? '' : s.id)}
                         style={{
-                          padding: '2px 10px', borderRadius: '20px', border: '1px solid',
-                          borderColor: form.sprintId === s.id ? 'var(--border-2)' : 'var(--border-1)',
+                          padding: '2px 10px',
+                          borderRadius: '20px',
+                          border: '1px solid',
+                          borderColor:
+                            form.sprintId === s.id ? 'var(--border-2)' : 'var(--border-1)',
                           background: form.sprintId === s.id ? 'var(--accent-glow)' : 'transparent',
                           color: form.sprintId === s.id ? 'var(--accent-400)' : 'var(--text-1)',
-                          fontSize: '12px', fontWeight: form.sprintId === s.id ? 600 : 400,
-                          cursor: 'pointer', transition: 'all 0.15s',
+                          fontSize: '12px',
+                          fontWeight: form.sprintId === s.id ? 600 : 400,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
                         }}
-                      >{s.name}</button>
+                      >
+                        {s.name}
+                      </button>
                     ))}
                   </div>
                 ) : (
-                  <span style={{ fontSize: '12px', color: 'var(--text-3)', fontStyle: 'italic' }}>Sin sprints</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-3)', fontStyle: 'italic' }}>
+                    Sin sprints
+                  </span>
                 )}
               </div>
               {/* Proyecto */}
-              <div style={{ flex: 1, minWidth: 148 }}>
+              <div style={{ flex: '1 1 100%' }}>
                 <FieldLabel>Proyecto</FieldLabel>
-                <select
-                  className="input-base"
-                  value={form.projectId}
-                  onChange={e => { upd('projectId', e.target.value); upd('repoRef', '') }}
-                  style={{ width: '100%', fontSize: '13px', cursor: 'pointer' }}
-                >
-                  <option value="">Sin proyecto</option>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                <ProjectPicker
+                  selectedIds={form.projectIds}
+                  onChange={ids => upd('projectIds', ids)}
+                  mode="single"
+                  placeholder="Buscar o vincular proyecto..."
+                  fullWidth
+                />
               </div>
-              {/* Repositorio */}
-              {repos.length > 0 && (
-                <div style={{ flex: 1, minWidth: 148 }}>
-                  <FieldLabel>Repositorio</FieldLabel>
-                  <select
-                    className="input-base"
-                    value={form.repoRef}
-                    onChange={e => upd('repoRef', e.target.value)}
-                    style={{ width: '100%', fontSize: '13px', cursor: 'pointer' }}
-                  >
-                    <option value="">Sin repositorio</option>
-                    {repos.map((r: string) => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-              )}
             </div>
             <div style={{ marginTop: '12px' }}>
               <FieldLabel>Etiquetas</FieldLabel>
@@ -1157,7 +1251,14 @@ export default function TaskPage() {
           {/* Descripcion */}
           <div style={CARD}>
             <CardHeader
-              icon={Ico(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></>)}
+              icon={Ico(
+                <>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </>
+              )}
               label="Descripcion"
             />
             <textarea
@@ -1166,14 +1267,26 @@ export default function TaskPage() {
               onChange={e => upd('description', e.target.value)}
               placeholder="Descripcion de la tarea (soporta Markdown)..."
               rows={4}
-              style={{ width: '100%', resize: 'vertical', fontSize: '13px', lineHeight: 1.6, fontFamily: 'var(--font-mono)', boxSizing: 'border-box' }}
+              style={{
+                width: '100%',
+                resize: 'vertical',
+                fontSize: '13px',
+                lineHeight: 1.6,
+                fontFamily: 'var(--font-mono)',
+                boxSizing: 'border-box',
+              }}
             />
           </div>
 
           {/* Criterios de Aceptacion */}
           <div style={CARD}>
             <CardHeader
-              icon={Ico(<><polyline points="9 11 12 14 22 4" /><polyline points="9 18 12 21 22 11" /></>)}
+              icon={Ico(
+                <>
+                  <polyline points="9 11 12 14 22 4" />
+                  <polyline points="9 18 12 21 22 11" />
+                </>
+              )}
               label="Criterios de Aceptacion"
               count={criteriaCount}
             />
@@ -1201,16 +1314,30 @@ export default function TaskPage() {
                       next[idx] = sc
                       upd('scenarios', next)
                     }}
-                    onRemove={() => upd('scenarios', form.scenarios.filter((_, i) => i !== idx))}
+                    onRemove={() =>
+                      upd(
+                        'scenarios',
+                        form.scenarios.filter((_, i) => i !== idx)
+                      )
+                    }
                   />
                 ))}
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <button
                     className="btn btn-ghost btn-sm"
-                    onClick={() => upd('scenarios', [
-                      ...form.scenarios,
-                      { name: '', steps: [{ keyword: 'Given', text: '' }, { keyword: 'When', text: '' }, { keyword: 'Then', text: '' }] },
-                    ])}
+                    onClick={() =>
+                      upd('scenarios', [
+                        ...form.scenarios,
+                        {
+                          name: '',
+                          steps: [
+                            { keyword: 'Given', text: '' },
+                            { keyword: 'When', text: '' },
+                            { keyword: 'Then', text: '' },
+                          ],
+                        },
+                      ])
+                    }
                     style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
                   >
                     <IcoPlus /> Nuevo escenario
@@ -1218,27 +1345,60 @@ export default function TaskPage() {
                   <button
                     className="btn btn-ghost btn-sm"
                     onClick={() => setShowGherkinImport(v => !v)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '5px', color: showGherkinImport ? 'var(--accent-400)' : undefined }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      color: showGherkinImport ? 'var(--accent-400)' : undefined,
+                    }}
                   >
                     <IcoGherkin /> Importar Gherkin
                   </button>
                 </div>
                 {showGherkinImport && (
-                  <div style={{ marginTop: '12px', padding: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-1)', background: 'var(--bg-1)' }}>
-                    <FieldLabel>Pegar texto Gherkin (Feature / Scenario / Given / When / Then)</FieldLabel>
+                  <div
+                    style={{
+                      marginTop: '12px',
+                      padding: '12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-1)',
+                      background: 'var(--bg-1)',
+                    }}
+                  >
+                    <FieldLabel>
+                      Pegar texto Gherkin (Feature / Scenario / Given / When / Then)
+                    </FieldLabel>
                     <textarea
                       className="input-base"
                       value={form.gherkinRaw}
                       onChange={e => upd('gherkinRaw', e.target.value)}
                       rows={7}
-                      placeholder={'Feature: Login\n\nScenario: Acceso exitoso\n  Given el usuario ingresa credenciales validas\n  When hace clic en Ingresar\n  Then ve el dashboard'}
-                      style={{ width: '100%', resize: 'vertical', fontSize: '12px', fontFamily: 'var(--font-mono)', boxSizing: 'border-box' }}
+                      placeholder={
+                        'Feature: Login\n\nScenario: Acceso exitoso\n  Given el usuario ingresa credenciales validas\n  When hace clic en Ingresar\n  Then ve el dashboard'
+                      }
+                      style={{
+                        width: '100%',
+                        resize: 'vertical',
+                        fontSize: '12px',
+                        fontFamily: 'var(--font-mono)',
+                        boxSizing: 'border-box',
+                      }}
                     />
                     <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                      <button className="btn btn-primary btn-sm" onClick={handleGherkinImport} disabled={!form.gherkinRaw.trim()}>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={handleGherkinImport}
+                        disabled={!form.gherkinRaw.trim()}
+                      >
                         Importar
                       </button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => { upd('gherkinRaw', ''); setShowGherkinImport(false) }}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => {
+                          upd('gherkinRaw', '')
+                          setShowGherkinImport(false)
+                        }}
+                      >
                         Cancelar
                       </button>
                     </div>
@@ -1261,25 +1421,52 @@ export default function TaskPage() {
             {showDeps && (
               <>
                 {form.dependencies.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '10px' }}>
+                  <div
+                    style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '10px' }}
+                  >
                     {form.dependencies.map(dep => (
                       <span
                         key={dep.id}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: '5px',
-                          padding: '3px 9px 3px 7px', borderRadius: '99px',
-                          border: '1px solid var(--border-1)', background: 'var(--bg-1)',
-                          color: 'var(--text-0)', fontSize: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '3px 9px 3px 7px',
+                          borderRadius: '99px',
+                          border: '1px solid var(--border-1)',
+                          background: 'var(--bg-1)',
+                          color: 'var(--text-0)',
+                          fontSize: '12px',
                         }}
                       >
                         <IcoLink />
                         {dep.title || dep.id}
                         <button
-                          onClick={() => upd('dependencies', form.dependencies.filter(d => d.id !== dep.id))}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', display: 'flex', padding: '0 1px' }}
+                          onClick={() =>
+                            upd(
+                              'dependencies',
+                              form.dependencies.filter(d => d.id !== dep.id)
+                            )
+                          }
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'var(--text-3)',
+                            display: 'flex',
+                            padding: '0 1px',
+                          }}
                         >
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                          <svg
+                            width="10"
+                            height="10"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                          >
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
                           </svg>
                         </button>
                       </span>
@@ -1300,7 +1487,12 @@ export default function TaskPage() {
           {/* Casos de Uso */}
           <div style={CARD}>
             <CardHeader
-              icon={Ico(<><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 9h6M9 13h6M9 17h4" /></>)}
+              icon={Ico(
+                <>
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M9 9h6M9 13h6M9 17h4" />
+                </>
+              )}
               label="Casos de Uso"
               collapsible
               open={showUseCases}
@@ -1311,9 +1503,18 @@ export default function TaskPage() {
                 className="input-base"
                 value={form.useCases}
                 onChange={e => upd('useCases', e.target.value)}
-                placeholder={'Como [usuario], quiero [accion] para [beneficio].\n\nEscenario: ...\nActores: ...\nPrecondicion: ...'}
+                placeholder={
+                  'Como [usuario], quiero [accion] para [beneficio].\n\nEscenario: ...\nActores: ...\nPrecondicion: ...'
+                }
                 rows={5}
-                style={{ width: '100%', resize: 'vertical', fontSize: '13px', lineHeight: 1.6, fontFamily: 'var(--font-mono)', boxSizing: 'border-box' }}
+                style={{
+                  width: '100%',
+                  resize: 'vertical',
+                  fontSize: '13px',
+                  lineHeight: 1.6,
+                  fontFamily: 'var(--font-mono)',
+                  boxSizing: 'border-box',
+                }}
               />
             )}
           </div>
@@ -1321,7 +1522,12 @@ export default function TaskPage() {
           {/* Notas libres */}
           <div style={CARD}>
             <CardHeader
-              icon={Ico(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></>)}
+              icon={Ico(
+                <>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </>
+              )}
               label="Notas libres"
             />
             <textarea
@@ -1330,28 +1536,50 @@ export default function TaskPage() {
               onChange={e => upd('extraNotes', e.target.value)}
               placeholder="Contexto adicional, decisiones tecnicas, referencias..."
               rows={3}
-              style={{ width: '100%', resize: 'vertical', fontSize: '13px', lineHeight: 1.6, boxSizing: 'border-box' }}
+              style={{
+                width: '100%',
+                resize: 'vertical',
+                fontSize: '13px',
+                lineHeight: 1.6,
+                boxSizing: 'border-box',
+              }}
             />
           </div>
 
           {/* Footer */}
           <div
             style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              gap: '10px', padding: '4px 2px 0', flexWrap: 'wrap',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '10px',
+              padding: '4px 2px 0',
+              flexWrap: 'wrap',
               borderTop: '1px solid var(--border-1)',
             }}
           >
-            <span style={{ fontSize: '12px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-              {criteriaCount > 0 ? `${criteriaCount} criterio${criteriaCount !== 1 ? 's' : ''}` : 'Sin criterios'}
-              {form.scenarios.length > 0 ? ` · ${form.scenarios.length} escenario${form.scenarios.length !== 1 ? 's' : ''}` : ''}
+            <span
+              style={{ fontSize: '12px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}
+            >
+              {criteriaCount > 0
+                ? `${criteriaCount} criterio${criteriaCount !== 1 ? 's' : ''}`
+                : 'Sin criterios'}
+              {form.scenarios.length > 0
+                ? ` · ${form.scenarios.length} escenario${form.scenarios.length !== 1 ? 's' : ''}`
+                : ''}
               {form.dependencies.length > 0 ? ` · ${form.dependencies.length} dep.` : ''}
             </span>
             <button
               className="btn btn-primary"
               onClick={handleSave}
               disabled={!form.title.trim()}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', borderRadius: 'var(--radius-md)', opacity: form.title.trim() ? 1 : 0.45 }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderRadius: 'var(--radius-md)',
+                opacity: form.title.trim() ? 1 : 0.45,
+              }}
             >
               <IcoSave />
               Crear Tarea
@@ -1371,15 +1599,30 @@ export default function TaskPage() {
 
       {/* Preview column */}
       {showPreview && (
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <div
+          style={{
+            flex: 1,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 0,
+          }}
+        >
           {/* Preview header */}
           <div
             style={{
               padding: '10px 20px 8px',
               borderBottom: '1px solid var(--border-1)',
-              fontSize: '11px', fontWeight: 600, color: 'var(--text-3)',
-              textTransform: 'uppercase', letterSpacing: '0.06em',
-              display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, flexWrap: 'wrap',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: 'var(--text-3)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              flexShrink: 0,
+              flexWrap: 'wrap',
             }}
           >
             <IcoPreview />
@@ -1388,7 +1631,18 @@ export default function TaskPage() {
               {(() => {
                 const sm = KANBAN_STATUS_META[form.status]
                 return (
-                  <span style={{ padding: '1px 8px', borderRadius: '99px', background: `${sm.color}18`, color: sm.color, fontSize: '10px', fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>
+                  <span
+                    style={{
+                      padding: '1px 8px',
+                      borderRadius: '99px',
+                      background: `${sm.color}18`,
+                      color: sm.color,
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      textTransform: 'none',
+                      letterSpacing: 0,
+                    }}
+                  >
                     {sm.label}
                   </span>
                 )
@@ -1396,13 +1650,35 @@ export default function TaskPage() {
               {(() => {
                 const pm = TASK_PRIORITY_META[form.priority]
                 return (
-                  <span style={{ padding: '1px 8px', borderRadius: '99px', background: `${pm.color}18`, color: pm.color, fontSize: '10px', fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>
+                  <span
+                    style={{
+                      padding: '1px 8px',
+                      borderRadius: '99px',
+                      background: `${pm.color}18`,
+                      color: pm.color,
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      textTransform: 'none',
+                      letterSpacing: 0,
+                    }}
+                  >
                     {pm.label}
                   </span>
                 )
               })()}
               {form.storyPoints != null && (
-                <span style={{ padding: '1px 8px', borderRadius: '99px', background: 'var(--accent-glow)', color: 'var(--accent-400)', fontSize: '10px', fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>
+                <span
+                  style={{
+                    padding: '1px 8px',
+                    borderRadius: '99px',
+                    background: 'var(--accent-glow)',
+                    color: 'var(--accent-400)',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    textTransform: 'none',
+                    letterSpacing: 0,
+                  }}
+                >
                   {form.storyPoints} pts
                 </span>
               )}
@@ -1412,11 +1688,21 @@ export default function TaskPage() {
           {/* Markdown real */}
           <div
             className="md-preview-root"
-            style={{ flex: 1, overflowY: 'auto', padding: '20px 28px 80px', fontSize: `${previewFontSize}px`, lineHeight: previewLineHeight }}
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '20px 28px 80px',
+              fontSize: `${previewFontSize}px`,
+              lineHeight: previewLineHeight,
+            }}
           >
             <article
               className={`md-prose ${previewIsDark ? 'md-prose--dark' : 'md-prose--light'}`}
-              style={{ maxWidth: `${previewProseWidth}px`, margin: '0 auto', fontFamily: PROSE_FONT_STACKS[previewProseFont] ?? PROSE_FONT_STACKS.sans }}
+              style={{
+                maxWidth: `${previewProseWidth}px`,
+                margin: '0 auto',
+                fontFamily: PROSE_FONT_STACKS[previewProseFont] ?? PROSE_FONT_STACKS.sans,
+              }}
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{previewMd}</ReactMarkdown>
             </article>
