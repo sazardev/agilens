@@ -5,7 +5,7 @@
 import git from 'isomorphic-git'
 import http from 'isomorphic-git/http/web'
 import LightningFS from '@isomorphic-git/lightning-fs'
-import type { GitCommit, GitFileStatus, GitBranch, GitHubConfig } from '@/types'
+import type { GitCommit, GitFileStatus, GitBranch, GitHubConfig, AppSettings } from '@/types'
 
 // ─── Filesystem ────────────────────────────────────────────────────────────────
 
@@ -235,6 +235,95 @@ export async function deleteNoteFile(dir: string, noteId: string) {
     await pfs.unlink(`${dir}/notes/${noteId}.md`)
   } catch {
     // file may not exist yet (never committed)
+  }
+}
+
+// ─── Config file ───────────────────────────────────────────────────────────────
+
+/**
+ * Write agilens.config.json to the root of the virtual FS.
+ * github.token is omitted (never persisted). lockPasswordHash is a
+ * one-way SHA-256 hash — safe to store in a private repo.
+ */
+export async function writeConfigFile(dir: string, settings: AppSettings): Promise<void> {
+  const safe = {
+    generatedAt: new Date().toISOString(),
+    version: '1.0',
+    userName: settings.userName,
+    userEmail: settings.userEmail,
+    uiTheme: settings.uiTheme,
+    accentColor: settings.accentColor,
+    customAccentHex: settings.customAccentHex,
+    editorFont: settings.editorFont,
+    editorFontSize: settings.editorFontSize,
+    editorTheme: settings.editorTheme,
+    uiDensity: settings.uiDensity,
+    lineHeight: settings.lineHeight,
+    wordWrap: settings.wordWrap,
+    markdownPreviewFont: settings.markdownPreviewFont,
+    markdownProseWidth: settings.markdownProseWidth,
+    markdownShowReadingTime: settings.markdownShowReadingTime,
+    markdownHeadingAnchors: settings.markdownHeadingAnchors,
+    markdownCopyCode: settings.markdownCopyCode,
+    markdownCodeHighlight: settings.markdownCodeHighlight,
+    markdownTabSize: settings.markdownTabSize,
+    markdownSpellcheck: settings.markdownSpellcheck,
+    // Security — hash is one-way SHA-256, safe to persist in private repo
+    lockEnabled: settings.lockEnabled,
+    lockPasswordHash: settings.lockPasswordHash,
+    lockTimeoutMinutes: settings.lockTimeoutMinutes,
+    lockOnHide: settings.lockOnHide,
+    defaultSprintId: settings.defaultSprintId ?? null,
+    // GitHub config — token intentionally omitted
+    github: settings.github
+      ? {
+          owner: settings.github.owner,
+          repo: settings.github.repo,
+          branch: settings.github.branch,
+        }
+      : null,
+  }
+  await pfs.writeFile(`${dir}/agilens.config.json`, JSON.stringify(safe, null, 2), 'utf8')
+}
+
+/**
+ * Read agilens.config.json from the virtual FS and return the stored
+ * settings as a Partial<AppSettings>. Returns null if the file is absent
+ * or unparseable. github.token is NOT restored (user must re-enter it).
+ */
+export async function readConfigFile(dir: string): Promise<Partial<AppSettings> | null> {
+  try {
+    const raw = (await pfs.readFile(`${dir}/agilens.config.json`, 'utf8')) as string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const d: Record<string, any> = JSON.parse(raw)
+    const p: Partial<AppSettings> = {}
+    if (d.userName != null) p.userName = d.userName
+    if (d.userEmail != null) p.userEmail = d.userEmail
+    if (d.uiTheme != null) p.uiTheme = d.uiTheme
+    if (d.accentColor != null) p.accentColor = d.accentColor
+    if (d.customAccentHex != null) p.customAccentHex = d.customAccentHex
+    if (d.editorFont != null) p.editorFont = d.editorFont
+    if (d.editorFontSize != null) p.editorFontSize = d.editorFontSize
+    if (d.editorTheme != null) p.editorTheme = d.editorTheme
+    if (d.uiDensity != null) p.uiDensity = d.uiDensity
+    if (d.lineHeight != null) p.lineHeight = d.lineHeight
+    if (d.wordWrap != null) p.wordWrap = d.wordWrap
+    if (d.markdownPreviewFont != null) p.markdownPreviewFont = d.markdownPreviewFont
+    if (d.markdownProseWidth != null) p.markdownProseWidth = d.markdownProseWidth
+    if (d.markdownShowReadingTime != null) p.markdownShowReadingTime = d.markdownShowReadingTime
+    if (d.markdownHeadingAnchors != null) p.markdownHeadingAnchors = d.markdownHeadingAnchors
+    if (d.markdownCopyCode != null) p.markdownCopyCode = d.markdownCopyCode
+    if (d.markdownCodeHighlight != null) p.markdownCodeHighlight = d.markdownCodeHighlight
+    if (d.markdownTabSize != null) p.markdownTabSize = d.markdownTabSize
+    if (d.markdownSpellcheck != null) p.markdownSpellcheck = d.markdownSpellcheck
+    if (d.lockEnabled != null) p.lockEnabled = d.lockEnabled
+    if (d.lockPasswordHash != null) p.lockPasswordHash = d.lockPasswordHash
+    if (d.lockTimeoutMinutes != null) p.lockTimeoutMinutes = d.lockTimeoutMinutes
+    if (d.lockOnHide != null) p.lockOnHide = d.lockOnHide
+    if (d.defaultSprintId != null) p.defaultSprintId = d.defaultSprintId
+    return p
+  } catch {
+    return null
   }
 }
 

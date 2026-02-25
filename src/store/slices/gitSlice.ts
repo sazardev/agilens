@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit'
 import type { GitFileStatus, GitCommit, GitBranch, GitHubConfig } from '@/types'
 import * as gitClient from '@/lib/git/client'
+import { updateSettings } from '@/store/slices/settingsSlice'
 
 export const GIT_DIR = '/agilens'
 
@@ -21,24 +22,31 @@ async function snapshot(dir: string) {
 
 export const gitInit = createAsyncThunk(
   'git/init',
-  async ({
-    name,
-    email,
-    notes = [],
-  }: {
-    name: string
-    email: string
-    notes?: Array<{ id: string; content: string }>
-  }) => {
+  async (
+    {
+      name,
+      email,
+      notes = [],
+    }: {
+      name: string
+      email: string
+      notes?: Array<{ id: string; content: string }>
+    },
+    { getState }
+  ) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = getState() as any
     await gitClient.initRepo(GIT_DIR, { name, email })
     // Write all existing notes to the virtual FS before the initial commit
     for (const note of notes) {
       await gitClient.writeNoteFile(GIT_DIR, note.id, note.content)
     }
-    if (notes.length > 0) {
-      // stage + commit the note files
-      await gitClient.commitAll(GIT_DIR, 'chore: sync existing notes', { name, email })
+    // Always write the config file so settings are tracked in git
+    if (state.settings) {
+      await gitClient.writeConfigFile(GIT_DIR, state.settings)
     }
+    // stage + commit notes + config
+    await gitClient.commitAll(GIT_DIR, 'chore: init agilens repo', { name, email })
     const snap = await snapshot(GIT_DIR)
     return { rootDir: GIT_DIR, ...snap }
   }
@@ -63,23 +71,32 @@ export const gitSyncStatus = createAsyncThunk(
 
 export const gitCommit = createAsyncThunk(
   'git/commit',
-  async ({
-    dir,
-    message,
-    name,
-    email,
-    notes = [],
-  }: {
-    dir: string
-    message: string
-    name: string
-    email: string
-    /** Current notes from Redux — written to LightningFS before committing */
-    notes?: Array<{ id: string; content: string }>
-  }) => {
+  async (
+    {
+      dir,
+      message,
+      name,
+      email,
+      notes = [],
+    }: {
+      dir: string
+      message: string
+      name: string
+      email: string
+      /** Current notes from Redux — written to LightningFS before committing */
+      notes?: Array<{ id: string; content: string }>
+    },
+    { getState }
+  ) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = getState() as any
     // Sync note content to virtual FS so git has real file state
     for (const note of notes) {
       await gitClient.writeNoteFile(dir, note.id, note.content)
+    }
+    // Always include updated settings in the commit
+    if (state.settings) {
+      await gitClient.writeConfigFile(dir, state.settings)
     }
     await gitClient.commitAll(dir, message, { name, email })
     return snapshot(dir)
@@ -147,6 +164,9 @@ export const gitAutoCommit = createAsyncThunk(
     const name: string = state.settings?.userName || 'Agilens'
     const email: string = state.settings?.userEmail || 'notes@agilens.app'
 
+    if (state.settings) {
+      await gitClient.writeConfigFile(rootDir, state.settings)
+    }
     await gitClient.writeNoteFile(rootDir, noteId, content)
     try {
       await gitClient.commitAll(rootDir, `note: ${noteTitle.slice(0, 60)}`, { name, email })
@@ -160,12 +180,18 @@ export const gitAutoCommit = createAsyncThunk(
 
 export const gitPull = createAsyncThunk(
   'git/pull',
-  async ({ dir, config }: { dir: string; config: GitHubConfig }, { getState }) => {
+  async ({ dir, config }: { dir: string; config: GitHubConfig }, { getState, dispatch }) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const state = getState() as any
     const name: string = state.settings?.userName || 'Agilens'
     const email: string = state.settings?.userEmail || 'notes@agilens.app'
     await gitClient.pullFromGitHub(dir, config, { name, email })
+    // Restore settings (including lock config) from the pulled config file
+    const savedSettings = await gitClient.readConfigFile(dir)
+    if (savedSettings) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(updateSettings(savedSettings))
+    }
     const noteFiles = await gitClient.readNoteFilesFromFS(dir)
     const snap = await snapshot(dir)
     return { ...snap, noteFiles }
@@ -174,12 +200,18 @@ export const gitPull = createAsyncThunk(
 
 export const gitClone = createAsyncThunk(
   'git/clone',
-  async ({ dir, config }: { dir: string; config: GitHubConfig }, { getState }) => {
+  async ({ dir, config }: { dir: string; config: GitHubConfig }, { getState, dispatch }) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const state = getState() as any
     const name: string = state.settings?.userName || 'Agilens'
     const email: string = state.settings?.userEmail || 'notes@agilens.app'
     await gitClient.cloneFromGitHub(dir, config, { name, email })
+    // Restore all settings (theme, fonts, lock config, etc.) from config file
+    const savedSettings = await gitClient.readConfigFile(dir)
+    if (savedSettings) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(updateSettings(savedSettings))
+    }
     const noteFiles = await gitClient.readNoteFilesFromFS(dir)
     const snap = await snapshot(dir)
     return { rootDir: dir, ...snap, noteFiles }
