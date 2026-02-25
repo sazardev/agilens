@@ -40,6 +40,8 @@ export interface MarkdownEditorHandle {
   getValue: () => string
   /** Exposes the underlying CodeMirror EditorView for advanced commands (search, etc.) */
   getView: () => EditorView | null
+  /** Reemplaza un rango de texto (usado para eliminar /query antes de insertar) */
+  replaceRange: (from: number, to: number, text: string) => void
 }
 
 // ─── Dark theme ───────────────────────────────────────────────────────────────
@@ -354,14 +356,29 @@ interface Props {
   placeholder?: string
   /** Note titles for [[wikilink]] autocomplete */
   allNotes?: { id: string; title: string }[]
+  /** Llamado cuando el usuario escribe "/query" — abre el menú de slash commands */
+  onSlashTrigger?: (
+    query: string,
+    coords: { top: number; bottom: number; left: number; right: number },
+    slashFrom: number,
+    cursorTo: number
+  ) => void
+  /** Llamado cuando el slash command ya no está activo */
+  onSlashDismiss?: () => void
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function MarkdownEditor(
-  { value, onChange, placeholder, allNotes = [] },
+  { value, onChange, placeholder, allNotes = [], onSlashTrigger, onSlashDismiss },
   ref
 ) {
   const cmRef = useRef<ReactCodeMirrorRef>(null)
+
+  // Ref de callbacks de slash para no recrear la extensión cuando cambien los props
+  const slashCbRef = useRef<{
+    trigger?: Props['onSlashTrigger']
+    dismiss?: Props['onSlashDismiss']
+  }>({})
 
   const fontSize = useAppSelector(s => s.settings.editorFontSize)
   const lineHeight = useAppSelector(s => s.settings.lineHeight ?? 1.7)
@@ -371,6 +388,10 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
   const spellcheck = useAppSelector(s => s.settings.markdownSpellcheck ?? false)
 
   const isDark = uiTheme === 'dark'
+
+  // Sincronizar callbacks de slash — fuera de useMemo para tener siempre la versión fresca
+  slashCbRef.current.trigger = onSlashTrigger
+  slashCbRef.current.dismiss = onSlashDismiss
 
   // Expose format + focus to parent
   useImperativeHandle(ref, () => ({
@@ -390,6 +411,10 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
     },
     getView() {
       return cmRef.current?.view ?? null
+    },
+    replaceRange(from: number, to: number, text: string) {
+      const view = cmRef.current?.view
+      if (view) view.dispatch({ changes: { from, to, insert: text } })
     },
   }))
 
@@ -486,6 +511,31 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
     [allNotes.map(n => n.id).join(',')]
   )
 
+  // Extensión de slash command — usa slashCbRef para evitar stale closures
+  const slashListener = useMemo(
+    () =>
+      EditorView.updateListener.of(update => {
+        if (!update.docChanged && !update.selectionSet) return
+        const { from } = update.state.selection.main
+        const line = update.state.doc.lineAt(from)
+        const textBefore = line.text.slice(0, from - line.from)
+        // Detecta "/" + caracteres no-espacio al final de lo escrito
+        const m = /(?:^|(?<=\s))(\/\S*)$/.exec(textBefore)
+        if (m) {
+          // slashPos: posición del "/" en el documento
+          const slashPos = from - m[1].length
+          const coords = update.view.coordsAtPos(slashPos)
+          if (coords) {
+            slashCbRef.current.trigger?.(m[1].slice(1), coords, slashPos, from)
+          }
+        } else {
+          slashCbRef.current.dismiss?.()
+        }
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [] // creado una sola vez; lee siempre slashCbRef.current (ref estable)
+  )
+
   const extensions = useMemo(
     () => [
       markdown({ base: markdownLanguage }),
@@ -494,10 +544,11 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
       formatKeymap,
       keymap.of([...defaultKeymap, ...historyKeymap]),
       autocompleteTheme,
+      slashListener,
       ...(wordWrap ? [EditorView.lineWrapping] : []),
       ...(wikiAutocomplete ? [wikiAutocomplete] : []),
     ],
-    [layoutTheme, wordWrap, formatKeymap, wikiAutocomplete]
+    [layoutTheme, wordWrap, formatKeymap, wikiAutocomplete, slashListener]
   )
 
   return (

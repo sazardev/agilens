@@ -1135,8 +1135,8 @@ export default function Sidebar() {
                         : notes
 
                       // Apply search filter, then sort: pinned notes first
-                      const searched = (
-                        q
+                      const searched = [
+                        ...(q
                           ? typeFiltered.filter(
                               n =>
                                 n.title.toLowerCase().includes(q) ||
@@ -1144,8 +1144,8 @@ export default function Sidebar() {
                                 n.tags.some(t => t.toLowerCase().includes(q)) ||
                                 (n.noteType && n.noteType.toLowerCase().includes(q))
                             )
-                          : typeFiltered
-                      ).sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false))
+                          : typeFiltered),
+                      ].sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false))
 
                       // Build groups
                       type Group = { key: string; label: string; icon?: string; notes: Note[] }

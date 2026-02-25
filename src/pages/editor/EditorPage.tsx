@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { EditorView } from '@codemirror/view'
 import TableEditorModal from '@/components/editor/TableEditorModal'
@@ -24,6 +24,8 @@ import MarkdownEditor, {
   type MarkdownEditorHandle,
   type FormatCmd,
 } from '@/components/editor/MarkdownEditor'
+import SlashCommandMenu, { type SlashCmd } from '@/components/editor/SlashCommandMenu'
+import NoteRelationPicker from '@/components/editor/NoteRelationPicker'
 import MarkdownPreview from '@/components/editor/MarkdownPreview'
 import {
   downloadNoteAsMarkdown,
@@ -210,7 +212,8 @@ export default function EditorPage() {
   const allNotes = useAppSelector(s => s.notes.notes)
   const sprints = useAppSelector(s => s.daily.sprints)
   const folders = useAppSelector(s => s.folders.folders)
-  const projects = useAppSelector(s => s.projects.projects.filter(p => !p.archived))
+  const _allProjects = useAppSelector(s => s.projects.projects)
+  const projects = useMemo(() => _allProjects.filter(p => !p.archived), [_allProjects])
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Separate timer for auto-commit (longer debounce: 2s of inactivity)
   const commitTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -235,6 +238,17 @@ export default function EditorPage() {
 
   // Table editor modal
   const [showTableEditor, setShowTableEditor] = useState(false)
+
+  // Slash command menu
+  const [slashMenu, setSlashMenu] = useState<{
+    query: string
+    anchorRect: { top: number; bottom: number; left: number; right: number }
+    slashFrom: number
+    cursorTo: number
+  } | null>(null)
+
+  // Note relation picker (opens from slash command)
+  const [showNotePicker, setShowNotePicker] = useState(false)
 
   // Find & Replace
   const [showFindReplace, setShowFindReplace] = useState(false)
@@ -327,6 +341,61 @@ export default function EditorPage() {
     }
     editorRef.current?.format(cmd)
   }, [])
+
+  /** Ejecuta el comando de slash seleccionado por el usuario */
+  function handleSlashSelect(cmd: SlashCmd) {
+    const view = editorRef.current?.getView()
+    if (!view || !slashMenu) return
+
+    // Eliminar el texto "/query" antes de insertar
+    const { slashFrom, cursorTo } = slashMenu
+    view.dispatch({ changes: { from: slashFrom, to: cursorTo, insert: '' } })
+    setSlashMenu(null)
+
+    switch (cmd.kind) {
+      case 'insert':
+        if (cmd.insert != null) editorRef.current?.insertText(cmd.insert)
+        break
+      case 'format':
+        if (cmd.formatCmd) {
+          if (cmd.formatCmd === 'table') {
+            setShowTableEditor(true)
+          } else {
+            editorRef.current?.format(cmd.formatCmd)
+          }
+        }
+        break
+      case 'modal':
+        if (cmd.modal === 'table') setShowTableEditor(true)
+        break
+      case 'view':
+        if (cmd.viewAction === 'focusMode') dispatch(toggleFocusMode())
+        else if (cmd.viewAction === 'split') dispatch(setEditorPreviewMode('split'))
+        else if (cmd.viewAction === 'preview') dispatch(setEditorPreviewMode('preview'))
+        else if (cmd.viewAction === 'edit') dispatch(setEditorPreviewMode('edit'))
+        break
+      case 'meta':
+        if (cmd.metaAction === 'addTag') {
+          // Enfocar el input de etiquetas en el panel de metadatos
+          setShowMeta(false)
+          setTimeout(() => tagInputRef.current?.focus(), 80)
+        } else if (
+          cmd.metaAction === 'assignProject' ||
+          cmd.metaAction === 'assignSprint' ||
+          cmd.metaAction === 'setType'
+        ) {
+          // Abrir el panel de metadatos donde están Tipo, Sprint y Proyecto
+          setShowMeta(true)
+        } else if (cmd.metaAction === 'relateNote') {
+          // Abrir el buscador de notas para insertar referencia wiki
+          setShowNotePicker(true)
+          return // no llamar a focus todavía
+        }
+        break
+    }
+
+    editorRef.current?.focus()
+  }
 
   function addTag(raw: string) {
     if (!note) return
@@ -2805,7 +2874,36 @@ export default function EditorPage() {
               onChange={handleChange}
               placeholder="Empieza a escribir en Markdown…"
               allNotes={allNotes.map(n => ({ id: n.id, title: n.title }))}
+              onSlashTrigger={(query, coords, slashFrom, cursorTo) =>
+                setSlashMenu({ query, anchorRect: coords, slashFrom, cursorTo })
+              }
+              onSlashDismiss={() => setSlashMenu(null)}
             />
+            {slashMenu && (
+              <SlashCommandMenu
+                query={slashMenu.query}
+                anchorRect={slashMenu.anchorRect}
+                onSelect={cmd => handleSlashSelect(cmd)}
+                onClose={() => {
+                  setSlashMenu(null)
+                  editorRef.current?.focus()
+                }}
+              />
+            )}
+            {showNotePicker && (
+              <NoteRelationPicker
+                excludeId={note.id}
+                onSelect={related => {
+                  setShowNotePicker(false)
+                  editorRef.current?.insertText(`[[${related.title || related.id}]]`)
+                  editorRef.current?.focus()
+                }}
+                onClose={() => {
+                  setShowNotePicker(false)
+                  editorRef.current?.focus()
+                }}
+              />
+            )}
           </div>
         )}
         {(effectiveMode === 'preview' || effectiveMode === 'split') && (

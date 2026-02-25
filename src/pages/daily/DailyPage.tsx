@@ -2,7 +2,7 @@
  * DailyPage — Daily Standup builder.
  * Minimal, focused, elegant.
  */
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useMemo } from 'react'
 import type { JSX } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -15,11 +15,13 @@ import {
   addSprint,
   setActiveSprint,
   updateSprint,
+  setEntryProjects,
 } from '@/store/slices/dailySlice'
 import { addNote } from '@/store/slices/notesSlice'
 import { addImpediment } from '@/store/slices/impedimentsSlice'
 import { setActiveNoteId } from '@/store/slices/uiSlice'
 import type { DailyEntry, Sprint, Note } from '@/types'
+import ProjectPicker from '@/components/projects/ProjectPicker'
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -493,7 +495,8 @@ export default function DailyPage() {
   const sprints = useAppSelector(s => s.daily.sprints)
   const activeSprintId = useAppSelector(s => s.daily.activeSprintId)
   const notes = useAppSelector(s => s.notes.notes)
-  // Preview uses the same settings as the real note viewer
+  const _allProjects = useAppSelector(s => s.projects.projects)
+  const projects = useMemo(() => _allProjects.filter(p => !p.archived), [_allProjects])
   const previewFontSize = useAppSelector(s => s.settings.editorFontSize)
   const previewLineHeight = useAppSelector(s => s.settings.lineHeight ?? 1.7)
   const previewProseFont = useAppSelector(s => s.settings.markdownPreviewFont ?? 'sans')
@@ -553,6 +556,7 @@ export default function DailyPage() {
   const [savedFlash, setSavedFlash] = useState(false)
   const [noteSearch, setNoteSearch] = useState('')
   const [showEvidences, setShowEvidences] = useState(false)
+  const [showProjects, setShowProjects] = useState(true)
   const [hiddenOptional, setHiddenOptional] = useState<Set<SectionKey>>(
     new Set(['highlights'] as SectionKey[])
   )
@@ -562,6 +566,20 @@ export default function DailyPage() {
   const isToday = currentDate === todayISO()
   const entry = entries.find(e => e.date === currentDate)
   const activeSprint = sprints.find(s => s.id === activeSprintId)
+
+  // Entry más reciente anterior a currentDate que tenga proyectos (para heredarlos)
+  const prevEntryWithProjects = useMemo(() => {
+    return (
+      [...entries]
+        .filter(e => e.date < currentDate && (e.projectIds?.length ?? 0) > 0)
+        .sort((a, b) => b.date.localeCompare(a.date))[0] ?? null
+    )
+  }, [entries, currentDate])
+
+  // IDs efectivos: los del entry actual si existe, si no los del día anterior (sugerencia visual)
+  const effectiveProjectIds = entry?.projectIds?.length
+    ? entry.projectIds
+    : (prevEntryWithProjects?.projectIds ?? [])
 
   const sprintNotes: Note[] = activeSprint
     ? notes.filter(
@@ -601,6 +619,10 @@ export default function DailyPage() {
       projectNoteIds: [],
       generalNotes: '',
       sprintId: activeSprintId ?? undefined,
+      // Hereda proyectos del día anterior automáticamente
+      projectIds: prevEntryWithProjects?.projectIds?.length
+        ? [...prevEntryWithProjects.projectIds]
+        : undefined,
     }
     dispatch(addEntry(e))
     return e
@@ -697,6 +719,7 @@ export default function DailyPage() {
         tags: ['daily', ...(sprint ? [sprint.name.toLowerCase().replace(/\s+/g, '-')] : [])],
         noteType: 'daily',
         sprintId: sprint?.id,
+        projectIds: e.projectIds?.length ? e.projectIds : undefined,
         createdAt: now,
         updatedAt: now,
         attachments: [],
@@ -1263,6 +1286,106 @@ export default function DailyPage() {
                     />
                   ))}
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Proyectos */}
+          <div style={card}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+              onClick={() => setShowProjects(v => !v)}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-2)' }}>
+                <svg
+                  width="13"
+                  height="13"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
+                </svg>
+              </span>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-0)', flex: 1 }}>
+                Proyectos
+              </span>
+              {(entry?.projectIds?.length ?? 0) > 0 && (
+                <span
+                  style={{
+                    fontSize: '11px',
+                    color: 'var(--accent-400)',
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 600,
+                  }}
+                >
+                  {entry!.projectIds!.length}
+                </span>
+              )}
+              <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-3)' }}>
+                {showProjects ? <IcoChevronUp /> : <IcoChevronDown />}
+              </span>
+            </div>
+
+            {/* Selected project pills (always visible) */}
+            {(entry?.projectIds?.length ?? 0) > 0 && !showProjects && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
+                {(entry!.projectIds ?? []).map(pid => {
+                  const proj = projects.find(p => p.id === pid)
+                  if (!proj) return null
+                  return (
+                    <span
+                      key={pid}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '2px 7px',
+                        borderRadius: '99px',
+                        background: proj.color + '18',
+                        border: `1px solid ${proj.color}33`,
+                        color: proj.color,
+                        fontSize: '11px',
+                        fontWeight: 500,
+                        fontFamily: 'var(--font-ui)',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '2px',
+                          background: proj.color,
+                          flexShrink: 0,
+                        }}
+                      />
+                      {proj.name}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+
+            {showProjects && (
+              <div style={{ marginTop: '10px' }}>
+                <ProjectPicker
+                  selectedIds={effectiveProjectIds}
+                  onChange={ids => {
+                    const e = getOrCreate()
+                    dispatch(setEntryProjects({ entryId: e.id, projectIds: ids }))
+                    flashSave()
+                  }}
+                  mode="multi"
+                  placeholder="Buscar o vincular proyectos…"
+                  fullWidth
+                />
               </div>
             )}
           </div>
