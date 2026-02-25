@@ -16,10 +16,14 @@ import {
   gitSyncStatus,
   gitCommit,
   gitPush,
+  gitPull,
+  gitClone,
   gitCheckout,
   gitCreateBranch,
   GIT_DIR,
 } from '@/store/slices/gitSlice'
+import { updateNote, addNote } from '@/store/slices/notesSlice'
+import type { Note } from '@/types'
 import {
   getChangedFilesInCommit,
   getFileContentAtCommit,
@@ -456,8 +460,17 @@ function FileRow({ path, status, title }: { path: string; status: string; title:
 
 export default function GitPage() {
   const dispatch = useAppDispatch()
-  const { initialized, status, log, branches, currentBranch, loading, error, pushStatus } =
-    useAppSelector(s => s.git)
+  const {
+    initialized,
+    status,
+    log,
+    branches,
+    currentBranch,
+    loading,
+    error,
+    pushStatus,
+    pullStatus,
+  } = useAppSelector(s => s.git)
   const settings = useAppSelector(s => s.settings)
   const notes = useAppSelector(s => s.notes.notes)
   const [commitMsg, setCommitMsg] = useState('')
@@ -561,6 +574,58 @@ export default function GitPage() {
   function handlePush() {
     if (!settings.github) return
     void dispatch(gitPush({ dir: GIT_DIR, config: settings.github }))
+  }
+  async function handlePull() {
+    if (!settings.github) return
+    const result = await dispatch(gitPull({ dir: GIT_DIR, config: settings.github }))
+    if (gitPull.fulfilled.match(result)) {
+      for (const { id, content } of result.payload.noteFiles) {
+        const existing = notes.find((n: Note) => n.id === id)
+        if (existing) {
+          dispatch(updateNote({ id, content }))
+        } else {
+          const now = new Date().toISOString()
+          dispatch(
+            addNote({
+              id,
+              title: id,
+              content,
+              tags: [],
+              noteType: 'note',
+              createdAt: now,
+              updatedAt: now,
+              attachments: [],
+            })
+          )
+        }
+      }
+    }
+  }
+  async function handleClone() {
+    if (!settings.github) return
+    const result = await dispatch(gitClone({ dir: GIT_DIR, config: settings.github }))
+    if (gitClone.fulfilled.match(result)) {
+      for (const { id, content } of result.payload.noteFiles) {
+        const existing = notes.find((n: Note) => n.id === id)
+        if (existing) {
+          dispatch(updateNote({ id, content }))
+        } else {
+          const now = new Date().toISOString()
+          dispatch(
+            addNote({
+              id,
+              title: id,
+              content,
+              tags: [],
+              noteType: 'note',
+              createdAt: now,
+              updatedAt: now,
+              attachments: [],
+            })
+          )
+        }
+      }
+    }
   }
   function handleCheckout(ref: string) {
     void dispatch(gitCheckout({ dir: GIT_DIR, ref }))
@@ -782,6 +847,16 @@ export default function GitPage() {
         >
           {loading ? 'Inicializando…' : 'Inicializar repositorio'}
         </button>
+        {settings.github && (
+          <button
+            className="btn btn-ghost"
+            onClick={() => void handleClone()}
+            disabled={loading}
+            style={{ minWidth: '180px' }}
+          >
+            {loading ? 'Importando…' : `\u2193 Importar desde GitHub · ${settings.github.repo}`}
+          </button>
+        )}
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
       </div>
     )

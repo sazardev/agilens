@@ -158,6 +158,34 @@ export const gitAutoCommit = createAsyncThunk(
   }
 )
 
+export const gitPull = createAsyncThunk(
+  'git/pull',
+  async ({ dir, config }: { dir: string; config: GitHubConfig }, { getState }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = getState() as any
+    const name: string = state.settings?.userName || 'Agilens'
+    const email: string = state.settings?.userEmail || 'notes@agilens.app'
+    await gitClient.pullFromGitHub(dir, config, { name, email })
+    const noteFiles = await gitClient.readNoteFilesFromFS(dir)
+    const snap = await snapshot(dir)
+    return { ...snap, noteFiles }
+  }
+)
+
+export const gitClone = createAsyncThunk(
+  'git/clone',
+  async ({ dir, config }: { dir: string; config: GitHubConfig }, { getState }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = getState() as any
+    const name: string = state.settings?.userName || 'Agilens'
+    const email: string = state.settings?.userEmail || 'notes@agilens.app'
+    await gitClient.cloneFromGitHub(dir, config, { name, email })
+    const noteFiles = await gitClient.readNoteFilesFromFS(dir)
+    const snap = await snapshot(dir)
+    return { rootDir: dir, ...snap, noteFiles }
+  }
+)
+
 // ─── State ────────────────────────────────────────────────────────────────────
 
 interface GitState {
@@ -170,6 +198,7 @@ interface GitState {
   loading: boolean
   error: string | null
   pushStatus: 'idle' | 'pushing' | 'success' | 'error'
+  pullStatus: 'idle' | 'pulling' | 'success' | 'error'
   /** Unix ms timestamp of the last successful auto-commit — used to trigger HistoryPanel refresh */
   lastAutoCommitAt: number
 }
@@ -184,6 +213,7 @@ const initialState: GitState = {
   loading: false,
   error: null,
   pushStatus: 'idle',
+  pullStatus: 'idle',
   lastAutoCommitAt: 0,
 }
 
@@ -323,6 +353,44 @@ const gitSlice = createSlice({
       state.branches = a.payload.branches
       state.currentBranch = a.payload.currentBranch
     })
+
+    // ── gitPull ──
+    builder
+      .addCase(gitPull.pending, state => {
+        state.pullStatus = 'pulling'
+        state.error = null
+      })
+      .addCase(gitPull.fulfilled, (state, a) => {
+        state.pullStatus = 'success'
+        state.status = a.payload.status
+        state.log = a.payload.log
+        state.branches = a.payload.branches
+        state.currentBranch = a.payload.currentBranch
+      })
+      .addCase(gitPull.rejected, (state, a) => {
+        state.pullStatus = 'error'
+        state.error = a.error.message ?? 'Error al hacer pull'
+      })
+
+    // ── gitClone ──
+    builder
+      .addCase(gitClone.pending, state => {
+        state.loading = true
+        state.error = null
+      })
+      .addCase(gitClone.fulfilled, (state, a) => {
+        state.loading = false
+        state.initialized = true
+        state.rootDir = a.payload.rootDir
+        state.status = a.payload.status
+        state.log = a.payload.log
+        state.branches = a.payload.branches
+        state.currentBranch = a.payload.currentBranch
+      })
+      .addCase(gitClone.rejected, (state, a) => {
+        state.loading = false
+        state.error = a.error.message ?? 'Error al clonar'
+      })
   },
 })
 

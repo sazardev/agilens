@@ -10,6 +10,7 @@ import { setNotes } from '@/store/slices/notesSlice'
 import { setEntries, setSprints } from '@/store/slices/dailySlice'
 import { setImpediments } from '@/store/slices/impedimentsSlice'
 import { clearAllFolders } from '@/store/slices/foldersSlice'
+import { reset as resetGit } from '@/store/slices/gitSlice'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -1255,6 +1256,17 @@ export default function SettingsPage() {
                   color: '#a78bfa',
                   action: () => dispatch(clearAllFolders()),
                 },
+                {
+                  key: 'git',
+                  label: 'Repositorio Git',
+                  desc: 'Elimina el historial de commits, ramas y archivos versionados localmente',
+                  color: '#34d399',
+                  action: () => {
+                    dispatch(resetGit())
+                    void indexedDB.deleteDatabase('agilens')
+                    setTimeout(() => window.location.reload(), 350)
+                  },
+                },
               ] as const
             ).map(({ key, label, desc, color, action }) => (
               <div
@@ -1494,8 +1506,9 @@ export default function SettingsPage() {
                   Restablecer todo
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--text-2)', marginTop: '3px' }}>
-                  Elimina absolutamente todos los datos: notas, dailies, sprints, impedimentos y
-                  ajustes. La app volverá al estado inicial.
+                  Elimina absolutamente todo: notas, dailies, sprints, impedimentos, carpetas,
+                  repositorio git, ajustes y tutorial de inicio. La app volverá al estado de primera
+                  visita como si fuera una instalación nueva.
                 </div>
               </div>
 
@@ -1617,10 +1630,15 @@ export default function SettingsPage() {
                         dispatch(setSprints([]))
                         dispatch(setImpediments([]))
                         dispatch(clearAllFolders())
+                        dispatch(resetGit())
                         set({ lockEnabled: false, lockPasswordHash: '' })
                         clearActivity()
+                        localStorage.removeItem('agilens_onboarded')
+                        localStorage.removeItem('agilens_state')
+                        void indexedDB.deleteDatabase('agilens')
+                        void indexedDB.deleteDatabase('agilens_attachments')
                         setConfirmReset(null)
-                        setTimeout(() => window.location.reload(), 300)
+                        setTimeout(() => window.location.reload(), 350)
                       }
                     }}
                   />
@@ -1644,10 +1662,15 @@ export default function SettingsPage() {
                         dispatch(setSprints([]))
                         dispatch(setImpediments([]))
                         dispatch(clearAllFolders())
+                        dispatch(resetGit())
                         set({ lockEnabled: false, lockPasswordHash: '' })
                         clearActivity()
+                        localStorage.removeItem('agilens_onboarded')
+                        localStorage.removeItem('agilens_state')
+                        void indexedDB.deleteDatabase('agilens')
+                        void indexedDB.deleteDatabase('agilens_attachments')
                         setConfirmReset(null)
-                        setTimeout(() => window.location.reload(), 300)
+                        setTimeout(() => window.location.reload(), 350)
                       }}
                     >
                       Restablecer todo

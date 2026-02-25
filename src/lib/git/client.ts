@@ -119,14 +119,97 @@ export async function checkoutBranch(dir: string, ref: string) {
 // ─── Push to GitHub ────────────────────────────────────────────────────────────
 
 export async function pushToGitHub(dir: string, config: GitHubConfig) {
+  // Use the actual local branch as ref so master → main works on first push
+  const localBranch = (await git.currentBranch({ fs, dir, fullname: false })) ?? 'master'
   await git.push({
     fs,
     http,
     dir,
     remote: 'origin',
-    ref: config.branch,
+    ref: localBranch,
+    remoteRef: config.branch,
+    corsProxy: 'https://cors.isomorphic-git.org',
     onAuth: () => ({ username: config.token }),
   })
+}
+
+// ─── Pull from GitHub ────────────────────────────────────────────────────────
+
+export async function pullFromGitHub(
+  dir: string,
+  config: GitHubConfig,
+  author: { name: string; email: string }
+): Promise<void> {
+  await setRemote(dir, config)
+  await git.pull({
+    fs,
+    http,
+    dir,
+    remote: 'origin',
+    ref: config.branch,
+    singleBranch: true,
+    author,
+    corsProxy: 'https://cors.isomorphic-git.org',
+    onAuth: () => ({ username: config.token }),
+  })
+}
+
+// ─── Clone from GitHub (first-time import of existing repo) ──────────────────
+
+export async function cloneFromGitHub(
+  dir: string,
+  config: GitHubConfig,
+  author: { name: string; email: string }
+): Promise<void> {
+  await ensureDir(dir)
+  // If git is already initialized, just pull instead of clone
+  let alreadyInit = false
+  try {
+    await git.resolveRef({ fs, dir, ref: 'HEAD' })
+    alreadyInit = true
+  } catch {
+    alreadyInit = false
+  }
+  if (alreadyInit) {
+    await pullFromGitHub(dir, config, author)
+    return
+  }
+  const url = `https://github.com/${config.owner}/${config.repo}.git`
+  await git.clone({
+    fs,
+    http,
+    dir,
+    url,
+    ref: config.branch,
+    singleBranch: true,
+    depth: 50,
+    corsProxy: 'https://cors.isomorphic-git.org',
+    onAuth: () => ({ username: config.token }),
+  })
+}
+
+// ─── Read note files from FS ─────────────────────────────────────────────────
+
+export async function readNoteFilesFromFS(
+  dir: string
+): Promise<Array<{ id: string; content: string }>> {
+  const notesDir = `${dir}/notes`
+  try {
+    const files = (await pfs.readdir(notesDir)) as string[]
+    const result: Array<{ id: string; content: string }> = []
+    for (const file of files) {
+      if (!file.endsWith('.md')) continue
+      try {
+        const content = (await pfs.readFile(`${notesDir}/${file}`, 'utf8')) as string
+        result.push({ id: file.slice(0, -3), content })
+      } catch {
+        /* skip unreadable files */
+      }
+    }
+    return result
+  } catch {
+    return []
+  }
 }
 
 export async function setRemote(dir: string, config: GitHubConfig) {
