@@ -100,15 +100,35 @@ export default defineConfig({
   build: {
     target: 'esnext',
     minify: 'esbuild',
-    chunkSizeWarningLimit: 700,
+    // Raised to 900 kB — Shiki language grammars are inherently large.
+    // Route-level code splitting keeps the initial load small.
+    chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
         manualChunks: {
+          // Core framework
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-redux': ['@reduxjs/toolkit', 'react-redux'],
+          // Editor (CodeMirror)
           'vendor-editor': ['@uiw/react-codemirror', 'codemirror'],
+          // Git engine
           'vendor-git': ['isomorphic-git', '@isomorphic-git/lightning-fs'],
+          // Animation
           'vendor-motion': ['framer-motion'],
+          // Markdown pipeline
+          'vendor-markdown': [
+            'react-markdown',
+            'remark-gfm',
+            'remark-math',
+            'remark-parse',
+            'remark-rehype',
+            'rehype-katex',
+            'rehype-sanitize',
+            'rehype-stringify',
+            'unified',
+          ],
+          // ZIP export
+          'vendor-zip': ['jszip'],
         },
       },
     },
