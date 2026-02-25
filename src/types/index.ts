@@ -67,6 +67,7 @@ export interface Note {
   kanbanStatus?: KanbanStatus // estado para el tablero kanban
   priority?: TaskPriority // prioridad de la tarea
   storyPoints?: number // story points de la tarea
+  projectId?: string // proyecto al que pertenece esta nota
 }
 
 // ─── Folders ──────────────────────────────────────────────────────────────────
@@ -105,6 +106,8 @@ export interface DailyEntry {
   highlights?: string[] // Logros destacados
   noteIds: string[] // Referencias a notas del día
   projectNoteIds?: string[] // Notas vinculadas como proyectos
+  projectIds?: string[] // IDs de proyectos Agilens trabajados en el día
+  repoRefs?: string[] // full names de repos referenciados (owner/repo)
   generalNotes?: string // Notas libres
   mood?: number // 1-5
   energy?: number // 1-5
@@ -129,6 +132,7 @@ export interface Sprint {
     toImprove?: string
     actions?: string
   }
+  projectIds?: string[] // proyectos involucrados en este sprint
 }
 
 // ─── Impediments ──────────────────────────────────────────────────────────────
@@ -149,6 +153,7 @@ export interface Impediment {
   notes?: string // notas libres
   linkedEntryIds?: string[] // daily entries relacionados
   linkedNoteIds?: string[] // notas/tareas relacionadas
+  projectId?: string // proyecto al que pertenece este impedimento
 }
 
 // ─── Git ───────────────────────────────────────────────────────────────────────
@@ -240,6 +245,39 @@ export interface AppSettings {
   lockPasswordHash: string // SHA-256 hex del PIN/contraseña
   lockTimeoutMinutes: number // 0 = nunca, >0 = inactividad en minutos
   lockOnHide: boolean // bloquear cuando la pestaña pierde el foco
+}
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+
+export type ProjectIconName =
+  | 'code'
+  | 'globe'
+  | 'server'
+  | 'database'
+  | 'mobile'
+  | 'desktop'
+  | 'api'
+  | 'cloud'
+  | 'shield'
+  | 'tool'
+  | 'star'
+  | 'flame'
+  | 'brain'
+  | 'package'
+  | 'layers'
+  | 'terminal'
+
+export interface Project {
+  id: string
+  name: string
+  description?: string
+  color: string // hex
+  icon: ProjectIconName
+  techStack: string[] // ['React', 'TypeScript', ...]
+  repoFullNames: string[] // ['owner/repo', 'owner/repo2']
+  createdAt: string // ISO
+  updatedAt: string // ISO
+  archived?: boolean
 }
 
 // ─── UI ────────────────────────────────────────────────────────────────────────

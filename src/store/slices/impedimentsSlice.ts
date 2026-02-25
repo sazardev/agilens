@@ -59,6 +59,14 @@ const impedimentsSlice = createSlice({
         imp.linkedNoteIds = imp.linkedNoteIds.filter(id => id !== action.payload.noteId)
       }
     },
+    /** Link an impediment to a project */
+    setImpedimentProject(
+      state,
+      action: PayloadAction<{ impedimentId: string; projectId: string | undefined }>
+    ) {
+      const imp = state.impediments.find(i => i.id === action.payload.impedimentId)
+      if (imp) imp.projectId = action.payload.projectId
+    },
   },
 })
 
@@ -71,6 +79,7 @@ export const {
   unlinkEntry,
   linkNote,
   unlinkNote,
+  setImpedimentProject,
 } = impedimentsSlice.actions
 
 export default impedimentsSlice.reducer

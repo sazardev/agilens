@@ -114,6 +114,11 @@ const notesSlice = createSlice({
       const note = state.notes.find(n => n.id === action.payload.id)
       if (note) note.storyPoints = action.payload.points
     },
+    /** Link a note to a Project (or clear with undefined) */
+    setNoteProject(state, action: PayloadAction<{ id: string; projectId: string | undefined }>) {
+      const note = state.notes.find(n => n.id === action.payload.id)
+      if (note) note.projectId = action.payload.projectId
+    },
   },
 })
 
@@ -135,6 +140,7 @@ export const {
   setKanbanStatus,
   setNotePriority,
   setStoryPoints,
+  setNoteProject,
 } = notesSlice.actions
 
 export default notesSlice.reducer

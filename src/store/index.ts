@@ -9,6 +9,7 @@ import templatesReducer from './slices/templatesSlice'
 import { BUILTIN_TEMPLATES } from './slices/templatesSlice'
 import foldersReducer, { autoOrganize, buildAutoFolders } from './slices/foldersSlice'
 import impedimentsReducer from './slices/impedimentsSlice'
+import projectsReducer from './slices/projectsSlice'
 import { deleteAttachmentBlob } from '@/lib/attachmentsDb'
 
 // ─── Listener middleware (side-effects tied to actions) ────────────────────────
@@ -128,7 +129,7 @@ function loadState() {
 
 function saveState(state: ReturnType<typeof store.getState>) {
   try {
-    const { notes, daily, settings, templates, folders, impediments } = state
+    const { notes, daily, settings, templates, folders, impediments, projects } = state
     // Strip dataUrl from attachments before saving to localStorage.
     // Blobs are persisted separately in IndexedDB (see src/lib/attachmentsDb.ts).
     const notesWithoutBlobs = {
@@ -147,6 +148,7 @@ function saveState(state: ReturnType<typeof store.getState>) {
         templates,
         folders,
         impediments,
+        projects,
         autoOrganizeMode: state.ui.autoOrganizeMode,
       })
     )
@@ -167,6 +169,7 @@ export const store = configureStore({
     templates: templatesReducer,
     folders: foldersReducer,
     impediments: impedimentsReducer,
+    projects: projectsReducer,
   },
   middleware: getDefaultMiddleware => getDefaultMiddleware().prepend(listenerMiddleware.middleware),
   preloadedState: loadState() as undefined,

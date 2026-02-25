@@ -14,6 +14,7 @@ const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage'))
 const ImpedimentsPage = lazy(() => import('@/pages/impediments/ImpedimentsPage'))
 const SprintsPage = lazy(() => import('@/pages/sprints/SprintsPage'))
 const KanbanPage = lazy(() => import('@/pages/kanban/KanbanPage'))
+const ProjectsPage = lazy(() => import('@/pages/projects/ProjectsPage'))
 
 // Minimal spinner shown while a page chunk is downloading
 function PageLoader() {
@@ -136,6 +137,14 @@ export const router = createBrowserRouter([
         element: (
           <S>
             <KanbanPage />
+          </S>
+        ),
+      },
+      {
+        path: 'projects',
+        element: (
+          <S>
+            <ProjectsPage />
           </S>
         ),
       },

@@ -186,9 +186,25 @@ const IconGroupAlpha = () => (
   </svg>
 )
 
+const IconProjects = () => (
+  <svg
+    width="14"
+    height="14"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    viewBox="0 0 24 24"
+  >
+    <polygon points="12 2 2 7 12 12 22 7 12 2" />
+    <polyline points="2 17 12 22 22 17" />
+    <polyline points="2 12 12 17 22 12" />
+  </svg>
+)
+
 const NAV_ITEMS = [
   { to: '/notes-map', label: 'Notas', Icon: IconNotes },
   { to: '/daily', label: 'Daily', Icon: IconDaily },
+  { to: '/projects', label: 'Proyectos', Icon: IconProjects },
   { to: '/sprints', label: 'Sprints', Icon: IconSprints },
   { to: '/kanban', label: 'Kanban', Icon: IconKanban },
   { to: '/impediments', label: 'Bloqueos', Icon: IconImpediments },

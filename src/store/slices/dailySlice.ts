@@ -48,6 +48,21 @@ const dailySlice = createSlice({
       if (state.activeSprintId === action.payload) state.activeSprintId = null
       state.sprints = state.sprints.filter(s => s.id !== action.payload)
     },
+    /** Set the projects linked to a daily entry */
+    setEntryProjects(state, action: PayloadAction<{ entryId: string; projectIds: string[] }>) {
+      const e = state.entries.find(e => e.id === action.payload.entryId)
+      if (e) e.projectIds = action.payload.projectIds
+    },
+    /** Set the repos referenced in a daily entry */
+    setEntryRepos(state, action: PayloadAction<{ entryId: string; repoRefs: string[] }>) {
+      const e = state.entries.find(e => e.id === action.payload.entryId)
+      if (e) e.repoRefs = action.payload.repoRefs
+    },
+    /** Set the projects involved in a sprint */
+    setSprintProjects(state, action: PayloadAction<{ sprintId: string; projectIds: string[] }>) {
+      const s = state.sprints.find(s => s.id === action.payload.sprintId)
+      if (s) s.projectIds = action.payload.projectIds
+    },
   },
 })
 
@@ -61,6 +76,9 @@ export const {
   setSprints,
   updateSprint,
   deleteSprint,
+  setEntryProjects,
+  setEntryRepos,
+  setSprintProjects,
 } = dailySlice.actions
 
 export default dailySlice.reducer
