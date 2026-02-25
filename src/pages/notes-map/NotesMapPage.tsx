@@ -10,7 +10,6 @@ import {
   useState,
   useMemo,
   type MouseEvent as RMouseEvent,
-  type WheelEvent as RWheelEvent,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppSelector } from '@/store'
@@ -19,6 +18,9 @@ import type { Note, Sprint, DailyEntry, Impediment, NoteType, Project } from '@/
 // ─── Node / Edge types ────────────────────────────────────────────────────────
 
 type NodeKind = 'note' | 'sprint' | 'daily' | 'impediment' | 'project'
+
+// Gravity mode: how nodes cluster visually ("solar system" grouping)
+type GravityMode = 'sprint' | 'project' | 'center' | 'free'
 
 interface GNode {
   id: string
@@ -34,6 +36,10 @@ interface GNode {
   vy: number
   pinned: boolean
   mass: number
+  /** ID of the sprint node this node gravitates toward (e.g. 'sprint:xxx') */
+  groupSprintId?: string
+  /** ID of the project node this node gravitates toward (e.g. 'project:xxx') */
+  groupProjectId?: string
 }
 
 interface GEdge {
@@ -89,11 +95,11 @@ const IMP_COLORS: Record<string, string> = {
 // ─── Force simulation constants ───────────────────────────────────────────────
 
 const DEFAULT_PHYSICS = {
-  repulsion: 4000,
+  repulsion: 2800,
   springLength: 120,
-  springK: 0.06,
+  springK: 0.05,
   gravity: 0.015,
-  damping: 0.82,
+  damping: 0.68,
 }
 
 interface PhysicsParams {
@@ -104,7 +110,7 @@ interface PhysicsParams {
   damping: number
 }
 
-const MAX_VELOCITY = 14
+const MAX_VELOCITY = 5
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -214,6 +220,7 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
         ...pp,
         pinned: false,
         mass: 3,
+        groupSprintId: `sprint:${s.id}`,
       })
       sprintSet.add(`sprint:${s.id}`)
     }
@@ -238,6 +245,7 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
       if (!ids.includes(projectFilter)) continue
     }
     const pp = prevPos(`note:${n.id}`)
+    const noteFirstProjectId = n.projectIds?.[0] ?? n.projectId
     nodes.push({
       id: `note:${n.id}`,
       kind: 'note',
@@ -249,6 +257,8 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
       ...pp,
       pinned: false,
       mass: 1.2,
+      groupSprintId: n.sprintId ? `sprint:${n.sprintId}` : undefined,
+      groupProjectId: noteFirstProjectId ? `project:${noteFirstProjectId}` : undefined,
     })
     noteSet.add(`note:${n.id}`)
   }
@@ -279,6 +289,7 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
         ...pp,
         pinned: false,
         mass: 1,
+        groupSprintId: e.sprintId ? `sprint:${e.sprintId}` : undefined,
       })
       dailySet.add(`daily:${e.id}`)
     }
@@ -303,6 +314,8 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
         ...pp,
         pinned: false,
         mass: 1.1,
+        groupSprintId: imp.sprintId ? `sprint:${imp.sprintId}` : undefined,
+        groupProjectId: imp.projectId ? `project:${imp.projectId}` : undefined,
       })
       impSet.add(`imp:${imp.id}`)
     }
@@ -325,6 +338,7 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
         ...pp,
         pinned: false,
         mass: 2,
+        groupProjectId: `project:${p.id}`,
       })
       projectSet.add(`project:${p.id}`)
     }
@@ -513,7 +527,8 @@ function simulationStep(
   edges: GEdge[],
   cx: number,
   cy: number,
-  params: PhysicsParams = DEFAULT_PHYSICS
+  params: PhysicsParams = DEFAULT_PHYSICS,
+  gravityMode: GravityMode = 'sprint'
 ) {
   const { repulsion, springLength, springK, gravity, damping } = params
   const n = nodes.length
@@ -527,7 +542,25 @@ function simulationStep(
       const dy = b.y - a.y
       const d2 = dx * dx + dy * dy + 0.01
       const d = Math.sqrt(d2)
-      const f = repulsion / d2
+
+      let mult = 1
+      if (gravityMode === 'sprint' || gravityMode === 'project') {
+        const aIsAnchor = gravityMode === 'sprint' ? a.kind === 'sprint' : a.kind === 'project'
+        const bIsAnchor = gravityMode === 'sprint' ? b.kind === 'sprint' : b.kind === 'project'
+        const sameGroup =
+          gravityMode === 'sprint'
+            ? !!(a.groupSprintId && a.groupSprintId === b.groupSprintId)
+            : !!(a.groupProjectId && a.groupProjectId === b.groupProjectId)
+        if (aIsAnchor && bIsAnchor) {
+          // Anchors of different groups repel to separate islands
+          mult = 5
+        } else if (sameGroup) {
+          // Same-group nodes cluster tightly → minimal internal repulsion
+          mult = 0.2
+        }
+      }
+
+      const f = (repulsion * mult) / d2
       const fx = (dx / d) * f
       const fy = (dy / d) * f
       a.vx -= fx / a.mass
@@ -559,12 +592,51 @@ function simulationStep(
     }
   }
 
-  // Center gravity
-  for (const node of nodes) {
-    if (node.pinned) continue
-    node.vx += (cx - node.x) * gravity
-    node.vy += (cy - node.y) * gravity
+  // ── Gravity by mode ──────────────────────────────────────────────────────────
+  if (gravityMode === 'center') {
+    // Classic single-center gravity
+    for (const node of nodes) {
+      if (node.pinned) continue
+      node.vx += (cx - node.x) * gravity
+      node.vy += (cy - node.y) * gravity
+    }
+  } else if (gravityMode === 'sprint' || gravityMode === 'project') {
+    // Island mode: members are pulled toward their anchor; anchors are NOT
+    // pulled to the center (their position is determined by mutual repulsion).
+    // A soft non-linear boundary prevents any node from drifting off-screen.
+    const anchorKind: NodeKind = gravityMode === 'sprint' ? 'sprint' : 'project'
+    const softBoundary = Math.min(cx, cy) * 0.75
+    for (const node of nodes) {
+      if (node.pinned) continue
+      const groupId = gravityMode === 'sprint' ? node.groupSprintId : node.groupProjectId
+
+      // Members pull toward their group anchor
+      if (groupId && node.kind !== anchorKind) {
+        const anchor = nodeMap.get(groupId)
+        if (anchor) {
+          node.vx += (anchor.x - node.x) * gravity * 1.6
+          node.vy += (anchor.y - node.y) * gravity * 1.6
+        }
+      }
+
+      // Orphan nodes (no group): weak pull toward center so they form their own island
+      if (!groupId) {
+        node.vx += (cx - node.x) * gravity * 0.25
+        node.vy += (cy - node.y) * gravity * 0.25
+      }
+
+      // Soft boundary: linear nudge toward center when far out
+      const bdx = cx - node.x
+      const bdy = cy - node.y
+      const bdist = Math.sqrt(bdx * bdx + bdy * bdy)
+      if (bdist > softBoundary) {
+        const excess = (bdist - softBoundary) / softBoundary
+        node.vx += (bdx / bdist) * gravity * 0.8 * excess
+        node.vy += (bdy / bdist) * gravity * 0.8 * excess
+      }
+    }
   }
+  // gravityMode === 'free': no gravity at all
 
   // Integrate
   for (const node of nodes) {
@@ -590,10 +662,60 @@ function drawGraph(
   selectedId: string | null,
   hoveredId: string | null,
   transform: DOMMatrix,
-  zoom: number
+  zoom: number,
+  gravityMode: GravityMode = 'sprint'
 ) {
   ctx.save()
   ctx.setTransform(transform)
+
+  // ── Group halos ("solar system" orbits) ──────────────────────────────────────
+  if (gravityMode === 'sprint' || gravityMode === 'project') {
+    const anchorKind: NodeKind = gravityMode === 'sprint' ? 'sprint' : 'project'
+    const anchorNodes = nodes.filter(n => n.kind === anchorKind)
+    for (const anchor of anchorNodes) {
+      const members = nodes.filter(n => {
+        if (n.id === anchor.id) return false
+        const gid = gravityMode === 'sprint' ? n.groupSprintId : n.groupProjectId
+        return gid === anchor.id
+      })
+      if (members.length === 0) continue
+
+      // Compute bounding radius: max distance from anchor to any member
+      let maxDist = anchor.radius + 40
+      for (const m of members) {
+        const d = Math.sqrt((m.x - anchor.x) ** 2 + (m.y - anchor.y) ** 2)
+        if (d + m.radius + 24 > maxDist) maxDist = d + m.radius + 24
+      }
+
+      // Outer halo ring
+      ctx.beginPath()
+      ctx.arc(anchor.x, anchor.y, maxDist, 0, Math.PI * 2)
+      ctx.fillStyle = anchor.color + '09'
+      ctx.fill()
+      ctx.strokeStyle = anchor.color + '28'
+      ctx.lineWidth = 1.2 / zoom
+      ctx.setLineDash([6 / zoom, 5 / zoom])
+      ctx.stroke()
+      ctx.setLineDash([])
+
+      // Inner glow around anchor
+      ctx.beginPath()
+      ctx.arc(anchor.x, anchor.y, anchor.radius * 2.2, 0, Math.PI * 2)
+      ctx.fillStyle = anchor.color + '11'
+      ctx.fill()
+
+      // Group label at top of halo (only when zoomed out enough to see the label)
+      if (zoom > 0.22) {
+        const fs = Math.max(9, Math.min(13, 11 / zoom))
+        ctx.font = `600 ${fs}px system-ui, sans-serif`
+        ctx.fillStyle = anchor.color + '70'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'bottom'
+        ctx.fillText(anchor.label, anchor.x, anchor.y - maxDist + fs * 0.2)
+        ctx.textBaseline = 'middle'
+      }
+    }
+  }
 
   // Draw edges
   for (const e of edges) {
@@ -816,6 +938,8 @@ interface FilterPanelProps {
   setLinkDependency: (v: boolean) => void
   linkProject: boolean
   setLinkProject: (v: boolean) => void
+  gravityMode: GravityMode
+  setGravityMode: (v: GravityMode) => void
   sprints: Sprint[]
   projects: Project[]
   allTags: string[]
@@ -858,6 +982,8 @@ function FilterPanel({
   setLinkDependency,
   linkProject,
   setLinkProject,
+  gravityMode,
+  setGravityMode,
   sprints,
   projects,
   allTags,
@@ -955,6 +1081,161 @@ function FilterPanel({
           flex: 1,
         }}
       >
+        {/* Agrupación / Sistema solar */}
+        <Section label="Agrupación visual">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {[
+              {
+                value: 'sprint' as GravityMode,
+                label: 'Por sprint',
+                icon: (
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <circle cx="6" cy="6" r="2" fill="currentColor" />
+                    <ellipse
+                      cx="6"
+                      cy="6"
+                      rx="5"
+                      ry="2.2"
+                      stroke="currentColor"
+                      strokeWidth="1"
+                      fill="none"
+                    />
+                    <circle cx="11" cy="6" r="1" fill="currentColor" opacity="0.6" />
+                  </svg>
+                ),
+              },
+              {
+                value: 'project' as GravityMode,
+                label: 'Por proyecto',
+                icon: (
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <circle cx="6" cy="6" r="1.5" fill="currentColor" />
+                    <circle cx="6" cy="1.5" r="1.2" fill="currentColor" opacity="0.7" />
+                    <circle cx="10" cy="8.5" r="1.2" fill="currentColor" opacity="0.7" />
+                    <circle cx="2" cy="8.5" r="1.2" fill="currentColor" opacity="0.7" />
+                    <line
+                      x1="6"
+                      y1="6"
+                      x2="6"
+                      y2="2.7"
+                      stroke="currentColor"
+                      strokeWidth="0.8"
+                      opacity="0.5"
+                    />
+                    <line
+                      x1="6"
+                      y1="6"
+                      x2="9.1"
+                      y2="7.9"
+                      stroke="currentColor"
+                      strokeWidth="0.8"
+                      opacity="0.5"
+                    />
+                    <line
+                      x1="6"
+                      y1="6"
+                      x2="2.9"
+                      y2="7.9"
+                      stroke="currentColor"
+                      strokeWidth="0.8"
+                      opacity="0.5"
+                    />
+                  </svg>
+                ),
+              },
+              {
+                value: 'center' as GravityMode,
+                label: 'Centro',
+                icon: (
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <circle cx="6" cy="6" r="1.5" fill="currentColor" />
+                    <circle
+                      cx="6"
+                      cy="6"
+                      r="3.5"
+                      stroke="currentColor"
+                      strokeWidth="0.8"
+                      fill="none"
+                      opacity="0.6"
+                    />
+                    <circle
+                      cx="6"
+                      cy="6"
+                      r="5.2"
+                      stroke="currentColor"
+                      strokeWidth="0.6"
+                      fill="none"
+                      opacity="0.35"
+                    />
+                  </svg>
+                ),
+              },
+              {
+                value: 'free' as GravityMode,
+                label: 'Libre',
+                icon: (
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <circle cx="2" cy="3" r="1.2" fill="currentColor" opacity="0.8" />
+                    <circle cx="9" cy="2" r="1" fill="currentColor" opacity="0.6" />
+                    <circle cx="5" cy="7" r="1.4" fill="currentColor" opacity="0.9" />
+                    <circle cx="10" cy="9" r="1" fill="currentColor" opacity="0.5" />
+                    <circle cx="2" cy="10" r="0.9" fill="currentColor" opacity="0.6" />
+                  </svg>
+                ),
+              },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setGravityMode(opt.value)}
+                style={{
+                  ...chipStyle,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  background: gravityMode === opt.value ? 'var(--accent-glow)' : 'transparent',
+                  borderColor: gravityMode === opt.value ? 'var(--accent-500)' : 'var(--border-2)',
+                  color: gravityMode === opt.value ? 'var(--accent-400)' : 'var(--text-2)',
+                  fontSize: 11,
+                }}
+              >
+                {opt.icon}
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 5, lineHeight: 1.4 }}>
+            {gravityMode === 'sprint' &&
+              'Cada sprint es un sistema solar — sus nodos orbitan alrededor de él.'}
+            {gravityMode === 'project' && 'Cada proyecto atrae a sus notas e impedimentos.'}
+            {gravityMode === 'center' && 'Todos los nodos gravitan al centro del mapa.'}
+            {gravityMode === 'free' && 'Sin gravedad — solo fuerzas de repulsión y resortes.'}
+          </div>
+        </Section>
+
         {/* Search */}
         <Section label="Buscar">
           <div style={{ position: 'relative' }}>
@@ -1877,6 +2158,13 @@ export default function NotesMapPage() {
     physicsRef.current = physics
   }, [physics])
 
+  const [gravityMode, setGravityMode] = useState<GravityMode>('sprint')
+  const gravityModeRef = useRef<GravityMode>('sprint')
+  useEffect(() => {
+    gravityModeRef.current = gravityMode
+    simRunning.current = true
+  }, [gravityMode])
+
   // ── Canvas / interaction state ──
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -1975,15 +2263,22 @@ export default function NotesMapPage() {
 
       // Sim step
       if (simRunning.current) {
-        simulationStep(nodesRef.current, edgesRef.current, w / 2, h / 2, physicsRef.current)
+        simulationStep(
+          nodesRef.current,
+          edgesRef.current,
+          w / 2,
+          h / 2,
+          physicsRef.current,
+          gravityModeRef.current
+        )
         // Stop sim when velocity is low
         const maxV = nodesRef.current.reduce(
           (m, n) => Math.max(m, Math.abs(n.vx) + Math.abs(n.vy)),
           0
         )
-        if (maxV < 0.15) {
+        if (maxV < 0.08) {
           stepsWithoutMotion++
-          if (stepsWithoutMotion > 120) simRunning.current = false
+          if (stepsWithoutMotion > 25) simRunning.current = false
         } else {
           stepsWithoutMotion = 0
         }
@@ -1995,7 +2290,16 @@ export default function NotesMapPage() {
       const t = transformRef.current
       const m = new DOMMatrix().translate(t.x, t.y).scale(t.scale)
 
-      drawGraph(ctx, nodesRef.current, edgesRef.current, selectedId, hoveredId, m, t.scale)
+      drawGraph(
+        ctx,
+        nodesRef.current,
+        edgesRef.current,
+        selectedId,
+        hoveredId,
+        m,
+        t.scale,
+        gravityModeRef.current
+      )
 
       rafRef.current = requestAnimationFrame(frame)
     }
@@ -2101,7 +2405,7 @@ export default function NotesMapPage() {
     isDraggingCanvas.current = false
   }, [])
 
-  const onWheel = useCallback((e: RWheelEvent<HTMLCanvasElement>) => {
+  const onWheel = useCallback((e: WheelEvent) => {
     e.preventDefault()
     const rect = (e.target as HTMLElement).getBoundingClientRect()
     const mx = e.clientX - rect.left
@@ -2114,6 +2418,14 @@ export default function NotesMapPage() {
     t.y = my - (my - t.y) * scaleRatio
     t.scale = newScale
   }, [])
+
+  // Attach wheel listener natively with passive:false so preventDefault works
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', onWheel)
+  }, [onWheel])
 
   const onDblClick = useCallback((e: RMouseEvent<HTMLCanvasElement>) => {
     const rect = (e.target as HTMLElement).getBoundingClientRect()
@@ -2217,7 +2529,6 @@ export default function NotesMapPage() {
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
-          onWheel={onWheel}
           onDoubleClick={onDblClick}
           onMouseLeave={() => {
             isDraggingCanvas.current = false
@@ -2350,6 +2661,8 @@ export default function NotesMapPage() {
         setLinkDependency={setLinkDependency}
         linkProject={linkProject}
         setLinkProject={setLinkProject}
+        gravityMode={gravityMode}
+        setGravityMode={setGravityMode}
         sprints={sprints}
         projects={projects}
         allTags={allTags}
