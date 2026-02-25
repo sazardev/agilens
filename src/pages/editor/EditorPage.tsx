@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { EditorView } from '@codemirror/view'
+import TableEditorModal from '@/components/editor/TableEditorModal'
 import { useAppDispatch, useAppSelector } from '@/store'
 import { setActiveNoteId, setEditorPreviewMode, toggleFocusMode } from '@/store/slices/uiSlice'
 import {
@@ -227,6 +229,17 @@ export default function EditorPage() {
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [copyHtmlDone, setCopyHtmlDone] = useState(false)
 
+  // Table editor modal
+  const [showTableEditor, setShowTableEditor] = useState(false)
+
+  // Find & Replace
+  const [showFindReplace, setShowFindReplace] = useState(false)
+  const [frSearch, setFrSearch] = useState('')
+  const [frReplace, setFrReplace] = useState('')
+  const [frCaseSensitive, setFrCaseSensitive] = useState(false)
+  const [frShowReplace, setFrShowReplace] = useState(false)
+  const frMatchIdxRef = useRef(0)
+
   // Focus / zen mode from Redux
   const focusMode = useAppSelector(s => s.ui.focusMode)
   const markdownPreviewFont = useAppSelector(s => s.settings.markdownPreviewFont ?? 'sans')
@@ -304,6 +317,10 @@ export default function EditorPage() {
   )
 
   const fmt = useCallback((cmd: FormatCmd) => {
+    if (cmd === 'table') {
+      setShowTableEditor(true)
+      return
+    }
     editorRef.current?.format(cmd)
   }, [])
 
@@ -494,6 +511,79 @@ export default function EditorPage() {
     if (files.length > 0) void handleImageFiles(files)
   }
 
+  // ── Find & Replace helpers ────────────────────────────────────────────────────
+  function frBuildMatches(searchTerm: string, cs: boolean) {
+    const view = editorRef.current?.getView()
+    if (!view || !searchTerm.trim()) return []
+    const text = view.state.doc.toString()
+    const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    try {
+      const re = new RegExp(escaped, cs ? 'g' : 'gi')
+      const matches: { from: number; to: number }[] = []
+      let m: RegExpExecArray | null
+      while ((m = re.exec(text)) !== null) {
+        matches.push({ from: m.index, to: m.index + m[0].length })
+        if (m[0].length === 0) re.lastIndex++
+      }
+      return matches
+    } catch {
+      return []
+    }
+  }
+
+  function frHighlight(idx: number, matches: { from: number; to: number }[]) {
+    const view = editorRef.current?.getView()
+    if (!view || matches.length === 0) return
+    const { from, to } = matches[idx]
+    view.dispatch({
+      selection: { anchor: from, head: to },
+      effects: EditorView.scrollIntoView(from, { y: 'center' }),
+    })
+    view.focus()
+  }
+
+  function frNext() {
+    const matches = frBuildMatches(frSearch, frCaseSensitive)
+    if (matches.length === 0) return
+    frMatchIdxRef.current = (frMatchIdxRef.current + 1) % matches.length
+    frHighlight(frMatchIdxRef.current, matches)
+  }
+
+  function frPrev() {
+    const matches = frBuildMatches(frSearch, frCaseSensitive)
+    if (matches.length === 0) return
+    frMatchIdxRef.current = (frMatchIdxRef.current - 1 + matches.length) % matches.length
+    frHighlight(frMatchIdxRef.current, matches)
+  }
+
+  function frReplaceOne() {
+    const view = editorRef.current?.getView()
+    if (!view || !frSearch.trim()) return
+    const matches = frBuildMatches(frSearch, frCaseSensitive)
+    if (matches.length === 0) return
+    const idx = frMatchIdxRef.current % matches.length
+    const { from, to } = matches[idx]
+    view.dispatch({ changes: { from, to, insert: frReplace } })
+    const newMatches = frBuildMatches(frSearch, frCaseSensitive)
+    frMatchIdxRef.current = idx < newMatches.length ? idx : 0
+    if (newMatches.length > 0) frHighlight(frMatchIdxRef.current, newMatches)
+  }
+
+  function frReplaceAll() {
+    const view = editorRef.current?.getView()
+    if (!view || !frSearch.trim()) return
+    const text = view.state.doc.toString()
+    const escaped = frSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    try {
+      const re = new RegExp(escaped, frCaseSensitive ? 'g' : 'gi')
+      const newText = text.replace(re, frReplace)
+      view.dispatch({ changes: { from: 0, to: text.length, insert: newText } })
+    } catch {
+      /* invalid regex */
+    }
+    frMatchIdxRef.current = 0
+  }
+
   function handlePrint() {
     if (!note) return
     setShowExport(false)
@@ -665,6 +755,18 @@ export default function EditorPage() {
   const wordCount = note.content.trim().split(/\s+/).filter(Boolean).length
   const charCount = note.content.length
   const readingMins = Math.max(1, Math.round(wordCount / 200))
+
+  // Find & Replace match count (from saved content for display)
+  let frMatchCount = 0
+  if (frSearch.trim() && showFindReplace) {
+    const escaped = frSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    try {
+      const re = new RegExp(escaped, frCaseSensitive ? 'g' : 'gi')
+      frMatchCount = (note.content.match(re) ?? []).length
+    } catch {
+      /* invalid regex */
+    }
+  }
 
   // When locked, always show preview-only (no editor)
   const effectiveMode = note.locked ? 'preview' : mode
@@ -1924,6 +2026,248 @@ export default function EditorPage() {
             </span>
           </div>
         )}
+
+        {/* ── Find & Replace overlay ── */}
+        {showFindReplace && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '8px',
+              right: '12px',
+              zIndex: 50,
+              background: 'var(--bg-1)',
+              border: '1px solid var(--border-2)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: 'var(--shadow-lg)',
+              padding: '10px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              minWidth: '340px',
+              maxWidth: '420px',
+              fontFamily: 'var(--font-ui)',
+            }}
+          >
+            {/* Header row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <svg
+                width="13"
+                height="13"
+                fill="none"
+                stroke="var(--accent-400)"
+                strokeWidth="1.8"
+                viewBox="0 0 24 24"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-1)' }}>
+                Buscar y reemplazar
+              </span>
+              <span
+                style={{
+                  marginLeft: 'auto',
+                  fontSize: '10px',
+                  color: 'var(--text-3)',
+                  background: 'var(--bg-3)',
+                  padding: '2px 6px',
+                  borderRadius: 'var(--radius-sm)',
+                }}
+              >
+                {frMatchCount > 0
+                  ? `${frMatchCount} resultado${frMatchCount !== 1 ? 's' : ''}`
+                  : frSearch.trim()
+                    ? 'Sin resultados'
+                    : ''}
+              </span>
+              <button
+                onClick={() => setShowFindReplace(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-3)',
+                  fontSize: '16px',
+                  lineHeight: 1,
+                  padding: '0 2px',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Search row */}
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <input
+                autoFocus
+                value={frSearch}
+                onChange={e => {
+                  setFrSearch(e.target.value)
+                  frMatchIdxRef.current = 0
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.shiftKey ? frPrev() : frNext()
+                  }
+                  if (e.key === 'Escape') setShowFindReplace(false)
+                }}
+                placeholder="Buscar…"
+                style={{
+                  flex: 1,
+                  padding: '5px 8px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-2)',
+                  background: 'var(--bg-2)',
+                  color: 'var(--text-0)',
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: '13px',
+                  outline: 'none',
+                }}
+              />
+              {/* Case-sensitive toggle */}
+              <button
+                title="Distinguir mayúsculas"
+                onClick={() => setFrCaseSensitive(v => !v)}
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: `1px solid ${frCaseSensitive ? 'var(--accent-500)' : 'var(--border-2)'}`,
+                  background: frCaseSensitive ? 'var(--accent-glow)' : 'var(--bg-2)',
+                  color: frCaseSensitive ? 'var(--accent-400)' : 'var(--text-3)',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                }}
+              >
+                Aa
+              </button>
+              {/* Prev / Next */}
+              {(['prev', 'next'] as const).map(dir => (
+                <button
+                  key={dir}
+                  title={dir === 'prev' ? 'Anterior (Shift+Enter)' : 'Siguiente (Enter)'}
+                  onClick={dir === 'prev' ? frPrev : frNext}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-2)',
+                    background: 'var(--bg-2)',
+                    color: 'var(--text-1)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <svg
+                    width="10"
+                    height="10"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    viewBox="0 0 24 24"
+                  >
+                    {dir === 'prev' ? (
+                      <polyline points="18 15 12 9 6 15" />
+                    ) : (
+                      <polyline points="6 9 12 15 18 9" />
+                    )}
+                  </svg>
+                </button>
+              ))}
+              {/* Toggle replace row */}
+              <button
+                title="Mostrar/ocultar reemplazo"
+                onClick={() => setFrShowReplace(v => !v)}
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: `1px solid ${frShowReplace ? 'var(--accent-500)' : 'var(--border-2)'}`,
+                  background: frShowReplace ? 'var(--accent-glow)' : 'var(--bg-2)',
+                  color: frShowReplace ? 'var(--accent-400)' : 'var(--text-3)',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                }}
+              >
+                <svg
+                  width="11"
+                  height="11"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Replace row (collapsible) */}
+            {frShowReplace && (
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <input
+                  value={frReplace}
+                  onChange={e => setFrReplace(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') setShowFindReplace(false)
+                  }}
+                  placeholder="Reemplazar por…"
+                  style={{
+                    flex: 1,
+                    padding: '5px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-2)',
+                    background: 'var(--bg-2)',
+                    color: 'var(--text-0)',
+                    fontFamily: 'var(--font-ui)',
+                    fontSize: '13px',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={frReplaceOne}
+                  title="Reemplazar uno"
+                  style={{
+                    padding: '5px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-2)',
+                    background: 'var(--bg-2)',
+                    color: 'var(--text-1)',
+                    fontFamily: 'var(--font-ui)',
+                    fontSize: '11px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  1×
+                </button>
+                <button
+                  onClick={frReplaceAll}
+                  title="Reemplazar todos"
+                  style={{
+                    padding: '5px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-2)',
+                    background: 'var(--bg-2)',
+                    color: 'var(--accent-400)',
+                    fontFamily: 'var(--font-ui)',
+                    fontSize: '11px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  Todo
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {(effectiveMode === 'edit' || effectiveMode === 'split') && (
           <div
             style={{
@@ -1942,6 +2286,7 @@ export default function EditorPage() {
               value={note.content}
               onChange={handleChange}
               placeholder="Empieza a escribir en Markdown…"
+              allNotes={allNotes.map(n => ({ id: n.id, title: n.title }))}
             />
           </div>
         )}
@@ -2023,6 +2368,14 @@ export default function EditorPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Table editor modal */}
+      {showTableEditor && (
+        <TableEditorModal
+          onInsert={md => editorRef.current?.insertText(md)}
+          onClose={() => setShowTableEditor(false)}
+        />
       )}
     </div>
   ) // end of editorContent

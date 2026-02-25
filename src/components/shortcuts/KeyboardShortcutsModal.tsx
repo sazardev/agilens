@@ -57,6 +57,11 @@ const GROUPS: ShortcutGroup[] = [
       { keys: ['Ctrl', 'Shift', '.'], label: 'Cita / blockquote' },
       { keys: ['Ctrl', 'Z'], label: 'Deshacer' },
       { keys: ['Ctrl', 'Y'], label: 'Rehacer' },
+      { keys: ['Ctrl', 'H'], label: 'Buscar y reemplazar' },
+      { keys: ['Ctrl', 'F'], label: 'Buscar en el editor' },
+      { keys: ['Ctrl', 'Shift', 'Z'], label: 'Modo zen (escritura sin distracciones)' },
+      { keys: ['Esc'], label: 'Salir de modo zen / Cerrar buscar' },
+      { keys: ['[[ ]]'], label: 'Wikilink – enlace interno a otra nota' },
     ],
   },
   {

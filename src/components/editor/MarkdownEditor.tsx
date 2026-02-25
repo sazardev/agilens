@@ -6,6 +6,11 @@ import { defaultKeymap, historyKeymap, history } from '@codemirror/commands'
 import { Prec } from '@codemirror/state'
 import { createTheme } from '@uiw/codemirror-themes'
 import { tags as t } from '@lezer/highlight'
+import {
+  autocompletion,
+  type CompletionContext,
+  type CompletionResult,
+} from '@codemirror/autocomplete'
 import { useAppSelector } from '@/store'
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -33,6 +38,8 @@ export interface MarkdownEditorHandle {
   insertText: (text: string) => void
   /** Returns the current document text directly from CodeMirror state */
   getValue: () => string
+  /** Exposes the underlying CodeMirror EditorView for advanced commands (search, etc.) */
+  getView: () => EditorView | null
 }
 
 // ─── Dark theme ───────────────────────────────────────────────────────────────
@@ -281,16 +288,77 @@ export function applyFormat(view: EditorView, cmd: FormatCmd) {
   }
 }
 
+// ─── Wikilink autocomplete ────────────────────────────────────────────────────
+function makeWikiLinkSource(notes: { id: string; title: string }[]) {
+  return function wikiSource(context: CompletionContext): CompletionResult | null {
+    const match = context.matchBefore(/\[\[[^\]]*$/)
+    if (!match) return null
+    // Require at least [[ + 1 char typed unless explicitly triggered
+    if (!context.explicit && match.text.length < 3) return null
+    const typed = match.text.slice(2).toLowerCase()
+    const options = notes
+      .filter(n => n.title && n.title.toLowerCase().includes(typed))
+      .slice(0, 14)
+      .map(n => ({
+        label: n.title,
+        apply: `${n.title}]]`,
+        detail: '[[wiki]]',
+        type: 'text',
+      }))
+    if (options.length === 0) return null
+    return {
+      from: match.from + 2, // position right after [[
+      to: context.pos,
+      options,
+      validFor: /^[^\]]*$/,
+    }
+  }
+}
+
+const autocompleteTheme = EditorView.theme({
+  '.cm-tooltip.cm-tooltip-autocomplete': {
+    background: 'var(--bg-1, #0f0f12)',
+    border: '1px solid var(--border-2, #2e2e3a)',
+    borderRadius: '6px',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+    fontFamily: 'var(--font-ui, system-ui)',
+    overflow: 'hidden',
+  },
+  '.cm-tooltip-autocomplete ul': {
+    padding: '2px 0',
+    margin: 0,
+    listStyle: 'none',
+    maxHeight: '240px',
+  },
+  '.cm-tooltip-autocomplete ul li': {
+    fontSize: '13px',
+    color: 'var(--text-1, #c0c0c8)',
+    padding: '5px 12px',
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+  },
+  '.cm-tooltip-autocomplete ul li[aria-selected]': {
+    background: 'var(--accent-glow, rgba(99,102,241,0.15)) !important',
+    color: 'var(--accent-400, #818cf8) !important',
+  },
+  '.cm-completionDetail': { color: 'var(--text-3, #4a4a56)', fontSize: '11px', marginLeft: 'auto' },
+  '.cm-completionLabel': { flex: 1 },
+})
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {
   value: string
   onChange: (value: string) => void
   placeholder?: string
+  /** Note titles for [[wikilink]] autocomplete */
+  allNotes?: { id: string; title: string }[]
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function MarkdownEditor(
-  { value, onChange, placeholder },
+  { value, onChange, placeholder, allNotes = [] },
   ref
 ) {
   const cmRef = useRef<ReactCodeMirrorRef>(null)
@@ -319,6 +387,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
     },
     getValue() {
       return cmRef.current?.view?.state.doc.toString() ?? ''
+    },
+    getView() {
+      return cmRef.current?.view ?? null
     },
   }))
 
@@ -405,6 +476,16 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
     []
   )
 
+  // Wiki-link autocomplete extension (rebuilt when note list changes)
+  const wikiAutocomplete = useMemo(
+    () =>
+      allNotes.length > 0
+        ? autocompletion({ override: [makeWikiLinkSource(allNotes)], defaultKeymap: true })
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allNotes.map(n => n.id).join(',')]
+  )
+
   const extensions = useMemo(
     () => [
       markdown({ base: markdownLanguage }),
@@ -412,9 +493,11 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
       history(),
       formatKeymap,
       keymap.of([...defaultKeymap, ...historyKeymap]),
+      autocompleteTheme,
       ...(wordWrap ? [EditorView.lineWrapping] : []),
+      ...(wikiAutocomplete ? [wikiAutocomplete] : []),
     ],
-    [layoutTheme, wordWrap, formatKeymap]
+    [layoutTheme, wordWrap, formatKeymap, wikiAutocomplete]
   )
 
   return (
