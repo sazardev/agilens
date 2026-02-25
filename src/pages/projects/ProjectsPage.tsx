@@ -6,7 +6,8 @@
  * Se integra con notas (evidencia/técnica/tarea), sprints,
  * impedimentos y dailys.
  */
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '@/store'
 import {
   addProject,
@@ -18,7 +19,8 @@ import {
   unlinkRepo,
 } from '@/store/slices/projectsSlice'
 import { setNoteProject } from '@/store/slices/notesSlice'
-import type { Project, ProjectIconName } from '@/types'
+import type { Project, ProjectIconName, NoteType } from '@/types'
+import { NOTE_TYPE_META } from '@/types'
 import { PROJECT_ICON_COMPONENTS, PROJECT_ICON_LABELS, ProjectIcon } from '@/lib/projectIcons'
 import {
   listUserRepos,
@@ -556,6 +558,7 @@ function GitHubImportModal({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexShrink: 0,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -584,11 +587,59 @@ function GitHubImportModal({
           </button>
         </div>
 
+        {/* Org / personal tabs */}
+        <div
+          style={{
+            padding: '0 16px',
+            borderBottom: '1px solid var(--border-0, rgba(255,255,255,0.08))',
+            display: 'flex',
+            gap: '2px',
+            overflowX: 'auto',
+            flexShrink: 0,
+          }}
+        >
+          {/* Personal tab */}
+          {[
+            { login: 'me', label: 'Mis repos' },
+            ...orgs.map(o => ({ login: o.login, label: o.login })),
+          ].map(tab => (
+            <button
+              key={tab.login}
+              onClick={() => {
+                setScope(tab.login)
+                setSearch('')
+              }}
+              style={{
+                padding: '8px 14px',
+                background: 'none',
+                border: 'none',
+                borderBottom: scope === tab.login ? '2px solid #6366f1' : '2px solid transparent',
+                color: scope === tab.login ? '#818cf8' : 'var(--text-2, #9ca3af)',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: scope === tab.login ? 600 : 400,
+                whiteSpace: 'nowrap',
+                marginBottom: '-1px',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+          {orgsLoading && (
+            <span
+              style={{ padding: '8px 10px', fontSize: '11px', color: 'var(--text-3, #6b7280)' }}
+            >
+              Cargando orgs…
+            </span>
+          )}
+        </div>
+
         {/* Search */}
         <div
           style={{
             padding: '12px 16px',
             borderBottom: '1px solid var(--border-0, rgba(255,255,255,0.06))',
+            flexShrink: 0,
           }}
         >
           <div style={{ position: 'relative' }}>
@@ -607,7 +658,7 @@ function GitHubImportModal({
               autoFocus
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar repositorio…"
+              placeholder={scope === 'me' ? 'Buscar en mis repos…' : `Buscar en ${scope}…`}
               style={{
                 width: '100%',
                 paddingLeft: '34px',
@@ -829,6 +880,7 @@ function GitHubImportModal({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexShrink: 0,
           }}
         >
           <span style={{ fontSize: '12px', color: 'var(--text-2, #9ca3af)' }}>
@@ -1017,13 +1069,50 @@ function ProjectDetail({
   token: string | null
 }) {
   const dispatch = useAppDispatch()
-  const notes = useAppSelector(s => s.notes.notes.filter(n => n.projectId === project.id))
-  const sprints = useAppSelector(s =>
-    s.daily.sprints.filter(s => s.projectIds?.includes(project.id))
+  const navigate = useNavigate()
+  const allNotes = useAppSelector(s => s.notes.notes)
+  const allSprints = useAppSelector(s => s.daily.sprints)
+  const allImpediments = useAppSelector(s => s.impediments.impediments)
+  const notes = useMemo(
+    () => allNotes.filter(n => n.projectId === project.id),
+    [allNotes, project.id]
   )
-  const impediments = useAppSelector(s =>
-    s.impediments.impediments.filter(i => i.projectId === project.id)
+  const sprints = useMemo(
+    () => allSprints.filter(s => s.projectIds?.includes(project.id)),
+    [allSprints, project.id]
   )
+  const impediments = useMemo(
+    () => allImpediments.filter(i => i.projectId === project.id),
+    [allImpediments, project.id]
+  )
+
+  // ── Notes panel state ──────────────────────────────────────────────────
+  const [notesOpen, setNotesOpen] = useState(true)
+  const [noteSearch, setNoteSearch] = useState('')
+  const [noteTypeFilter, setNoteTypeFilter] = useState<NoteType | 'all'>('all')
+  const [noteSprintFilter, setNoteSprintFilter] = useState<string | 'all'>('all')
+  const [noteSort, setNoteSort] = useState<'title-asc' | 'title-desc' | 'newest' | 'oldest'>(
+    'newest'
+  )
+
+  const filteredNotes = useMemo(() => {
+    let list = notes
+    if (noteSearch.trim()) {
+      const q = noteSearch.toLowerCase()
+      list = list.filter(n => (n.title || '').toLowerCase().includes(q))
+    }
+    if (noteTypeFilter !== 'all') list = list.filter(n => n.noteType === noteTypeFilter)
+    if (noteSprintFilter !== 'all') list = list.filter(n => n.sprintId === noteSprintFilter)
+    if (noteSort === 'title-asc')
+      list = [...list].sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+    else if (noteSort === 'title-desc')
+      list = [...list].sort((a, b) => (b.title || '').localeCompare(a.title || ''))
+    else if (noteSort === 'newest')
+      list = [...list].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+    else if (noteSort === 'oldest')
+      list = [...list].sort((a, b) => (a.updatedAt || '').localeCompare(b.updatedAt || ''))
+    return list
+  }, [notes, noteSearch, noteTypeFilter, noteSprintFilter, noteSort])
 
   function addLinkedRepo(fullName: string) {
     dispatch(linkRepo({ projectId: project.id, repoFullName: fullName }))
@@ -1244,81 +1333,317 @@ function ProjectDetail({
       </div>
 
       {/* Notes linked */}
-      {notes.length > 0 && (
-        <div>
-          <h3
+      <div
+        style={{
+          border: '1px solid var(--border-0, rgba(255,255,255,0.07))',
+          borderRadius: '10px',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Collapsible header */}
+        <button
+          onClick={() => setNotesOpen(v => !v)}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 14px',
+            background: 'var(--bg-1, rgba(255,255,255,0.04))',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--text-1, #d1d5db)',
+            fontFamily: 'var(--font-ui)',
+          }}
+        >
+          <span
             style={{
-              margin: '0 0 10px',
-              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '7px',
+              fontSize: '12px',
               fontWeight: 600,
-              color: 'var(--text-2, #9ca3af)',
               textTransform: 'uppercase',
-              letterSpacing: '0.05em',
+              letterSpacing: '0.06em',
+              color: 'var(--text-2, #9ca3af)',
             }}
           >
+            <IcoNote />
             Notas vinculadas
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {notes.slice(0, 12).map(n => (
-              <div
-                key={n.id}
+            <span
+              style={{
+                background: 'var(--bg-3, rgba(255,255,255,0.1))',
+                borderRadius: '99px',
+                padding: '1px 7px',
+                fontSize: '10px',
+                fontWeight: 500,
+                color: 'var(--text-2, #9ca3af)',
+              }}
+            >
+              {notes.length}
+            </span>
+          </span>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            style={{
+              transform: notesOpen ? 'rotate(180deg)' : 'none',
+              transition: 'transform 0.2s',
+            }}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+
+        {notesOpen && (
+          <div
+            style={{
+              padding: '10px 12px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+            }}
+          >
+            {/* Controls */}
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {/* Search */}
+              <div style={{ position: 'relative', flex: '1 1 140px', minWidth: '120px' }}>
+                <span
+                  style={{
+                    position: 'absolute',
+                    left: '7px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--text-3, #6b7280)',
+                    pointerEvents: 'none',
+                    display: 'flex',
+                  }}
+                >
+                  <IcoSearch />
+                </span>
+                <input
+                  value={noteSearch}
+                  onChange={e => setNoteSearch(e.target.value)}
+                  placeholder="Buscar nota…"
+                  style={{
+                    width: '100%',
+                    paddingLeft: '26px',
+                    padding: '5px 8px 5px 26px',
+                    background: 'var(--bg-2, rgba(255,255,255,0.06))',
+                    border: '1px solid var(--border-0, rgba(255,255,255,0.09))',
+                    borderRadius: '6px',
+                    color: 'var(--text-0, #e2e2e2)',
+                    fontSize: '12px',
+                    outline: 'none',
+                    fontFamily: 'var(--font-ui)',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              {/* Type filter */}
+              <select
+                value={noteTypeFilter}
+                onChange={e => setNoteTypeFilter(e.target.value as NoteType | 'all')}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '7px 12px',
-                  borderRadius: '8px',
-                  background: 'var(--bg-2, rgba(255,255,255,0.04))',
+                  padding: '5px 8px',
+                  background: 'var(--bg-2, rgba(255,255,255,0.06))',
+                  border: '1px solid var(--border-0, rgba(255,255,255,0.09))',
+                  borderRadius: '6px',
+                  color: 'var(--text-1, #d1d5db)',
+                  fontSize: '12px',
                   cursor: 'pointer',
+                  fontFamily: 'var(--font-ui)',
                 }}
               >
-                <IcoNote />
-                <span
+                <option value="all">Todos los tipos</option>
+                {(Object.keys(NOTE_TYPE_META) as NoteType[]).map(t => (
+                  <option key={t} value={t}>
+                    {NOTE_TYPE_META[t].label}
+                  </option>
+                ))}
+              </select>
+              {/* Sprint filter */}
+              {sprints.length > 0 && (
+                <select
+                  value={noteSprintFilter}
+                  onChange={e => setNoteSprintFilter(e.target.value)}
                   style={{
-                    flex: 1,
-                    fontSize: '13px',
-                    color: 'var(--text-0, #e2e2e2)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {n.title || '(sin título)'}
-                </span>
-                <span
-                  style={{
-                    fontSize: '11px',
-                    padding: '2px 7px',
-                    borderRadius: '99px',
-                    background: 'rgba(148,163,184,0.12)',
-                    color: '#94a3b8',
-                  }}
-                >
-                  {n.noteType}
-                </span>
-                <button
-                  onClick={() => dispatch(setNoteProject({ id: n.id, projectId: undefined }))}
-                  title="Desvincular nota"
-                  style={{
-                    background: 'none',
-                    border: 'none',
+                    padding: '5px 8px',
+                    background: 'var(--bg-2, rgba(255,255,255,0.06))',
+                    border: '1px solid var(--border-0, rgba(255,255,255,0.09))',
+                    borderRadius: '6px',
+                    color: 'var(--text-1, #d1d5db)',
+                    fontSize: '12px',
                     cursor: 'pointer',
-                    color: 'var(--text-3, #6b7280)',
-                    padding: '2px',
+                    fontFamily: 'var(--font-ui)',
                   }}
                 >
-                  <IcoX />
-                </button>
-              </div>
-            ))}
-            {notes.length > 12 && (
-              <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-3, #6b7280)' }}>
-                +{notes.length - 12} notas más
+                  <option value="all">Todos los sprints</option>
+                  {sprints.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {/* Sort */}
+              <select
+                value={noteSort}
+                onChange={e => setNoteSort(e.target.value as typeof noteSort)}
+                style={{
+                  padding: '5px 8px',
+                  background: 'var(--bg-2, rgba(255,255,255,0.06))',
+                  border: '1px solid var(--border-0, rgba(255,255,255,0.09))',
+                  borderRadius: '6px',
+                  color: 'var(--text-1, #d1d5db)',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-ui)',
+                }}
+              >
+                <option value="newest">Más reciente</option>
+                <option value="oldest">Más antigua</option>
+                <option value="title-asc">A → Z</option>
+                <option value="title-desc">Z → A</option>
+              </select>
+            </div>
+
+            {/* Notes list */}
+            {notes.length === 0 ? (
+              <p
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--text-3, #6b7280)',
+                  fontStyle: 'italic',
+                  margin: '4px 0 0',
+                }}
+              >
+                No hay notas vinculadas a este proyecto.
               </p>
+            ) : filteredNotes.length === 0 ? (
+              <p
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--text-3, #6b7280)',
+                  fontStyle: 'italic',
+                  margin: '4px 0 0',
+                }}
+              >
+                No hay notas que coincidan con los filtros.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                {filteredNotes.map(n => {
+                  const typeMeta = NOTE_TYPE_META[n.noteType]
+                  return (
+                    <div
+                      key={n.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '7px 10px',
+                        borderRadius: '7px',
+                        background: 'var(--bg-2, rgba(255,255,255,0.04))',
+                        cursor: 'pointer',
+                        transition: 'background 0.15s',
+                      }}
+                      onClick={() => navigate(`/editor/${n.id}`)}
+                      onMouseEnter={e => {
+                        ;(e.currentTarget as HTMLElement).style.background =
+                          'var(--bg-3, rgba(255,255,255,0.08))'
+                      }}
+                      onMouseLeave={e => {
+                        ;(e.currentTarget as HTMLElement).style.background =
+                          'var(--bg-2, rgba(255,255,255,0.04))'
+                      }}
+                    >
+                      <span style={{ color: typeMeta.color, flexShrink: 0 }}>
+                        <IcoNote />
+                      </span>
+                      <span
+                        style={{
+                          flex: 1,
+                          fontSize: '13px',
+                          color: 'var(--text-0, #e2e2e2)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {n.title || '(sin título)'}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          padding: '2px 6px',
+                          borderRadius: '99px',
+                          background: typeMeta.color + '22',
+                          color: typeMeta.color,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {typeMeta.label}
+                      </span>
+                      {n.sprintId &&
+                        (() => {
+                          const sp = sprints.find(s => s.id === n.sprintId)
+                          return sp ? (
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                padding: '2px 6px',
+                                borderRadius: '99px',
+                                background: 'rgba(167,139,250,0.15)',
+                                color: '#a78bfa',
+                                flexShrink: 0,
+                                maxWidth: '90px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                              title={sp.name}
+                            >
+                              {sp.name}
+                            </span>
+                          ) : null
+                        })()}
+                      <button
+                        onClick={e => {
+                          e.stopPropagation()
+                          dispatch(setNoteProject({ id: n.id, projectId: undefined }))
+                        }}
+                        title="Desvincular nota"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--text-3, #6b7280)',
+                          padding: '2px',
+                          flexShrink: 0,
+                          opacity: 0.6,
+                        }}
+                        onMouseEnter={e => {
+                          ;(e.currentTarget as HTMLElement).style.opacity = '1'
+                        }}
+                        onMouseLeave={e => {
+                          ;(e.currentTarget as HTMLElement).style.opacity = '0.6'
+                        }}
+                      >
+                        <IcoX />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Sprints linked */}
       {sprints.length > 0 && (

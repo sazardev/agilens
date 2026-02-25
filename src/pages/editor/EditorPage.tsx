@@ -13,6 +13,7 @@ import {
   toggleNotePin,
   toggleNoteLocked,
   setNoteColor,
+  setNoteProject,
 } from '@/store/slices/notesSlice'
 import type { NoteAttachment, NoteType } from '@/types'
 import { NOTE_TYPE_META } from '@/types'
@@ -208,6 +209,7 @@ export default function EditorPage() {
   const allNotes = useAppSelector(s => s.notes.notes)
   const sprints = useAppSelector(s => s.daily.sprints)
   const folders = useAppSelector(s => s.folders.folders)
+  const projects = useAppSelector(s => s.projects.projects.filter(p => !p.archived))
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Separate timer for auto-commit (longer debounce: 2s of inactivity)
   const commitTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -223,6 +225,7 @@ export default function EditorPage() {
   const [tagFocused, setTagFocused] = useState(false)
   const [tagSuggIdx, setTagSuggIdx] = useState(-1)
   const [showExport, setShowExport] = useState(false)
+  const [showMore, setShowMore] = useState(false)
   const [showBacklinks, setShowBacklinks] = useState(false)
   const [showMeta, setShowMeta] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -398,17 +401,23 @@ export default function EditorPage() {
     dispatch(setNoteFolder({ noteId: note.id, folderId }))
   }
 
-  // ── Close meta/export/color dropdowns when clicking outside ──────────────
+  function handleSetProject(projectId: string | null) {
+    if (!note) return
+    dispatch(setNoteProject({ id: note.id, projectId: projectId ?? undefined }))
+  }
+
+  // ── Close meta/export/color/more dropdowns when clicking outside ────────────
   useEffect(() => {
-    if (!showMeta && !showExport && !showColorPicker) return
+    if (!showMeta && !showExport && !showColorPicker && !showMore) return
     function handleOutside() {
       setShowMeta(false)
       setShowExport(false)
       setShowColorPicker(false)
+      setShowMore(false)
     }
     document.addEventListener('mousedown', handleOutside)
     return () => document.removeEventListener('mousedown', handleOutside)
-  }, [showMeta, showExport, showColorPicker])
+  }, [showMeta, showExport, showColorPicker, showMore])
 
   // ── Escape exits focus mode ───────────────────────────────────────────────
   useEffect(() => {
@@ -1027,10 +1036,81 @@ export default function EditorPage() {
           )}
         </span>
 
+        {/* ── Project badge ── */}
+        {note.projectId &&
+          (() => {
+            const proj = projects.find(p => p.id === note.projectId)
+            return proj ? (
+              <button
+                title={`Proyecto: ${proj.name} — clic para ir a Proyectos`}
+                onClick={() => navigate('/projects')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  height: '22px',
+                  padding: '0 8px',
+                  borderRadius: '99px',
+                  border: `1px solid ${proj.color}44`,
+                  background: proj.color + '18',
+                  color: proj.color,
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  flexShrink: 0,
+                  transition: 'all var(--transition-fast)',
+                  maxWidth: '140px',
+                  overflow: 'hidden',
+                }}
+                onMouseEnter={e => {
+                  const el = e.currentTarget as HTMLElement
+                  el.style.background = proj.color + '30'
+                  el.style.borderColor = proj.color + '88'
+                }}
+                onMouseLeave={e => {
+                  const el = e.currentTarget as HTMLElement
+                  el.style.background = proj.color + '18'
+                  el.style.borderColor = proj.color + '44'
+                }}
+              >
+                <span
+                  style={{
+                    width: '7px',
+                    height: '7px',
+                    borderRadius: '2px',
+                    background: proj.color,
+                    flexShrink: 0,
+                  }}
+                />
+                <span
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {proj.name}
+                </span>
+                <svg
+                  width="9"
+                  height="9"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  style={{ flexShrink: 0, opacity: 0.7 }}
+                >
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            ) : null
+          })()}
+
         {/* ── Metadata panel button ── */}
         <div style={{ position: 'relative', flexShrink: 0 }}>
           <button
-            title="Asignar tipo, sprint y carpeta"
+            title="Asignar tipo, sprint, proyecto y carpeta"
             onMouseDown={e => e.stopPropagation()}
             onClick={() => {
               setShowMeta(v => !v)
@@ -1273,6 +1353,139 @@ export default function EditorPage() {
                 </div>
               </div>
 
+              <div style={{ height: '1px', background: 'var(--border-1)', margin: '0 12px' }} />
+
+              {/* ── Proyecto ── */}
+              <div style={{ padding: '10px 12px 8px' }}>
+                <p
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '10px',
+                    color: 'var(--text-3)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.07em',
+                    margin: '0 0 6px',
+                  }}
+                >
+                  Proyecto
+                </p>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px',
+                    maxHeight: '130px',
+                    overflowY: 'auto',
+                  }}
+                >
+                  <button
+                    onClick={() => handleSetProject(null)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '7px',
+                      padding: '5px 8px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: `1px solid ${!note.projectId ? 'var(--accent-500)' : 'transparent'}`,
+                      background: !note.projectId ? 'var(--accent-glow)' : 'transparent',
+                      color: !note.projectId ? 'var(--accent-400)' : 'var(--text-3)',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-ui)',
+                      fontSize: '12px',
+                      textAlign: 'left' as const,
+                      transition: 'all var(--transition-fast)',
+                    }}
+                    onMouseEnter={e => {
+                      if (note.projectId)
+                        (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+                    }}
+                    onMouseLeave={e => {
+                      if (note.projectId)
+                        (e.currentTarget as HTMLElement).style.background = 'transparent'
+                    }}
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="16" />
+                      <line x1="8" y1="12" x2="16" y2="12" />
+                    </svg>
+                    Sin proyecto
+                  </button>
+                  {projects.map(project => {
+                    const isActive = note.projectId === project.id
+                    return (
+                      <button
+                        key={project.id}
+                        onClick={() => handleSetProject(project.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '7px',
+                          padding: '5px 8px',
+                          borderRadius: 'var(--radius-sm)',
+                          border: `1px solid ${isActive ? 'var(--accent-500)' : 'transparent'}`,
+                          background: isActive ? 'var(--accent-glow)' : 'transparent',
+                          color: isActive ? 'var(--accent-400)' : 'var(--text-1)',
+                          cursor: 'pointer',
+                          fontFamily: 'var(--font-ui)',
+                          fontSize: '12px',
+                          textAlign: 'left' as const,
+                          transition: 'all var(--transition-fast)',
+                          overflow: 'hidden',
+                          whiteSpace: 'nowrap',
+                          textOverflow: 'ellipsis',
+                        }}
+                        onMouseEnter={e => {
+                          if (!isActive)
+                            (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+                        }}
+                        onMouseLeave={e => {
+                          if (!isActive)
+                            (e.currentTarget as HTMLElement).style.background = 'transparent'
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '3px',
+                            background: project.color,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {project.name}
+                        </span>
+                        {isActive && (
+                          <span style={{ marginLeft: 'auto', fontSize: '10px', opacity: 0.7 }}>
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                  {projects.length === 0 && (
+                    <p
+                      style={{
+                        fontSize: '11px',
+                        color: 'var(--text-3)',
+                        margin: '2px 8px',
+                        fontStyle: 'italic',
+                      }}
+                    >
+                      No hay proyectos. Créalos en Proyectos.
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {/* ── Carpeta (si hay carpetas) ── */}
               {folders.length > 0 && (
                 <>
@@ -1403,33 +1616,7 @@ export default function EditorPage() {
           )}
         </div>
 
-        {/* Duplicate + Delete */}
-        <button
-          title="Duplicar nota (⧉)"
-          onClick={handleDuplicate}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '28px',
-            height: '28px',
-            borderRadius: 'var(--radius-sm)',
-            border: 'none',
-            background: 'transparent',
-            color: 'var(--text-2)',
-            cursor: 'pointer',
-            flexShrink: 0,
-            fontSize: '14px',
-          }}
-          onMouseEnter={e => {
-            ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
-          }}
-          onMouseLeave={e => {
-            ;(e.currentTarget as HTMLElement).style.background = 'transparent'
-          }}
-        >
-          ⧉
-        </button>
+        {/* Delete */}
         <button
           title="Eliminar nota"
           onClick={handleDeleteNote}
@@ -1595,58 +1782,6 @@ export default function EditorPage() {
           </svg>
         </button>
 
-        {/* Lock */}
-        <button
-          title={note.locked ? 'Desbloquear nota' : 'Bloquear nota (solo lectura)'}
-          onClick={handleLock}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '28px',
-            height: '28px',
-            borderRadius: 'var(--radius-sm)',
-            border: 'none',
-            background: note.locked ? 'rgba(239,68,68,0.1)' : 'transparent',
-            color: note.locked ? '#ef4444' : 'var(--text-3)',
-            cursor: 'pointer',
-            transition: 'all var(--transition-fast)',
-            flexShrink: 0,
-          }}
-          onMouseEnter={e => {
-            if (!note.locked) (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
-          }}
-          onMouseLeave={e => {
-            if (!note.locked) (e.currentTarget as HTMLElement).style.background = 'transparent'
-          }}
-        >
-          {note.locked ? (
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0110 0v4" />
-            </svg>
-          ) : (
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 019.9-1" />
-            </svg>
-          )}
-        </button>
-
         {/* Focus mode */}
         <button
           title={focusMode ? 'Salir del modo zen (Esc)' : 'Modo zen — escritura sin distracciones'}
@@ -1687,11 +1822,16 @@ export default function EditorPage() {
           </svg>
         </button>
 
-        {/* Export */}
+        {/* ── ⋯ More menu (Duplicate · Lock · Export) ── */}
         <div style={{ position: 'relative', flexShrink: 0 }} onMouseDown={e => e.stopPropagation()}>
           <button
-            title="Exportar nota"
-            onClick={() => setShowExport(v => !v)}
+            title="Más opciones"
+            onClick={() => {
+              setShowMore(v => !v)
+              setShowExport(false)
+              setShowMeta(false)
+              setShowColorPicker(false)
+            }}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -1700,26 +1840,26 @@ export default function EditorPage() {
               height: '28px',
               borderRadius: 'var(--radius-sm)',
               border: 'none',
-              background: showExport ? 'var(--bg-3)' : 'transparent',
+              background: showMore ? 'var(--bg-3)' : 'transparent',
               color: 'var(--text-2)',
               cursor: 'pointer',
               transition: 'background var(--transition-fast)',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => {
+              if (!showMore) (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+            }}
+            onMouseLeave={e => {
+              if (!showMore) (e.currentTarget as HTMLElement).style.background = 'transparent'
             }}
           >
-            <svg
-              width="14"
-              height="14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              viewBox="0 0 24 24"
-            >
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="5" cy="12" r="1.5" />
+              <circle cx="12" cy="12" r="1.5" />
+              <circle cx="19" cy="12" r="1.5" />
             </svg>
           </button>
-          {showExport && (
+          {showMore && (
             <div
               style={{
                 position: 'absolute',
@@ -1729,27 +1869,238 @@ export default function EditorPage() {
                 background: 'var(--bg-2)',
                 border: '1px solid var(--border-2)',
                 borderRadius: 'var(--radius-md)',
-                boxShadow: 'var(--shadow-md)',
-                zIndex: 50,
+                boxShadow: 'var(--shadow-lg)',
+                zIndex: 60,
                 minWidth: '200px',
                 overflow: 'hidden',
               }}
             >
-              {[
-                { label: 'Descargar .md', action: handleDownload, icon: '↓' },
-                { label: 'Descargar .html', action: () => void handleDownloadHtml(), icon: '⌗' },
-                { label: 'Imprimir / PDF', action: () => void handlePrint(), icon: '⎙' },
-                {
-                  label: copyHtmlDone ? '¡Copiado!' : 'Copiar HTML',
-                  action: () => void handleCopyHtml(),
-                  icon: copyHtmlDone ? '✓' : '⎘',
-                },
-                {
-                  label: `ZIP (${allNotes.length} notas)`,
-                  action: () => void handleDownloadZip(),
-                  icon: '⊞',
-                },
-              ].map(item => (
+              {/* Acciones rápidas */}
+              <button
+                onClick={() => {
+                  handleDuplicate()
+                  setShowMore(false)
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  padding: '8px 14px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: '13px',
+                  color: 'var(--text-1)',
+                  textAlign: 'left' as const,
+                  transition: 'background var(--transition-fast)',
+                }}
+                onMouseEnter={e => {
+                  ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+                }}
+                onMouseLeave={e => {
+                  ;(e.currentTarget as HTMLElement).style.background = 'transparent'
+                }}
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--accent-400)"
+                  strokeWidth="2"
+                  style={{ flexShrink: 0 }}
+                >
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                </svg>
+                Duplicar nota
+              </button>
+              <button
+                onClick={() => {
+                  handleLock()
+                  setShowMore(false)
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  padding: '8px 14px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: '13px',
+                  color: note.locked ? '#ef4444' : 'var(--text-1)',
+                  textAlign: 'left' as const,
+                  transition: 'background var(--transition-fast)',
+                }}
+                onMouseEnter={e => {
+                  ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+                }}
+                onMouseLeave={e => {
+                  ;(e.currentTarget as HTMLElement).style.background = 'transparent'
+                }}
+              >
+                {note.locked ? (
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#ef4444"
+                    strokeWidth="2"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0110 0v4" />
+                  </svg>
+                ) : (
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--accent-400)"
+                    strokeWidth="2"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 019.9-1" />
+                  </svg>
+                )}
+                {note.locked ? 'Desbloquear nota' : 'Bloquear nota'}
+              </button>
+
+              {/* Separator */}
+              <div style={{ height: '1px', background: 'var(--border-1)', margin: '4px 0' }} />
+
+              {/* Export options */}
+              {(
+                [
+                  {
+                    label: 'Descargar .md',
+                    action: () => {
+                      handleDownload()
+                      setShowMore(false)
+                    },
+                    iconEl: (
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--accent-400)"
+                        strokeWidth="2"
+                        style={{ flexShrink: 0 }}
+                      >
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    label: 'Descargar .html',
+                    action: () => {
+                      void handleDownloadHtml()
+                      setShowMore(false)
+                    },
+                    iconEl: (
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--accent-400)"
+                        strokeWidth="2"
+                        style={{ flexShrink: 0 }}
+                      >
+                        <polyline points="16 18 22 12 16 6" />
+                        <polyline points="8 6 2 12 8 18" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    label: 'Imprimir / PDF',
+                    action: () => {
+                      void handlePrint()
+                      setShowMore(false)
+                    },
+                    iconEl: (
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--accent-400)"
+                        strokeWidth="2"
+                        style={{ flexShrink: 0 }}
+                      >
+                        <polyline points="6 9 6 2 18 2 18 9" />
+                        <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
+                        <rect x="6" y="14" width="12" height="8" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    label: copyHtmlDone ? '¡Copiado!' : 'Copiar HTML',
+                    action: () => {
+                      void handleCopyHtml()
+                    },
+                    iconEl: copyHtmlDone ? (
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--accent-400)"
+                        strokeWidth="2.5"
+                        style={{ flexShrink: 0 }}
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--accent-400)"
+                        strokeWidth="2"
+                        style={{ flexShrink: 0 }}
+                      >
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    label: `ZIP (${allNotes.length} notas)`,
+                    action: () => {
+                      void handleDownloadZip()
+                      setShowMore(false)
+                    },
+                    iconEl: (
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--accent-400)"
+                        strokeWidth="2"
+                        style={{ flexShrink: 0 }}
+                      >
+                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                        <line x1="12" y1="22.08" x2="12" y2="12" />
+                      </svg>
+                    ),
+                  },
+                ] as { label: string; action: () => void; iconEl: React.ReactNode }[]
+              ).map(item => (
                 <button
                   key={item.label}
                   onClick={item.action}
@@ -1775,15 +2126,7 @@ export default function EditorPage() {
                     ;(e.currentTarget as HTMLElement).style.background = 'transparent'
                   }}
                 >
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      color: 'var(--accent-400)',
-                      minWidth: '14px',
-                    }}
-                  >
-                    {item.icon}
-                  </span>
+                  {item.iconEl}
                   {item.label}
                 </button>
               ))}
