@@ -1236,8 +1236,8 @@ export default function TaskPage() {
                 <ProjectPicker
                   selectedIds={form.projectIds}
                   onChange={ids => upd('projectIds', ids)}
-                  mode="single"
-                  placeholder="Buscar o vincular proyecto..."
+                  mode="multi"
+                  placeholder="Buscar o vincular proyectos..."
                   fullWidth
                 />
               </div>

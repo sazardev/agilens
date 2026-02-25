@@ -14,11 +14,11 @@ import {
 } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppSelector } from '@/store'
-import type { Note, Sprint, DailyEntry, Impediment, NoteType } from '@/types'
+import type { Note, Sprint, DailyEntry, Impediment, NoteType, Project } from '@/types'
 
 // ─── Node / Edge types ────────────────────────────────────────────────────────
 
-type NodeKind = 'note' | 'sprint' | 'daily' | 'impediment'
+type NodeKind = 'note' | 'sprint' | 'daily' | 'impediment' | 'project'
 
 interface GNode {
   id: string
@@ -39,7 +39,16 @@ interface GNode {
 interface GEdge {
   source: string
   target: string
-  kind: 'sprint-link' | 'tag-shared' | 'daily-note' | 'daily-sprint' | 'imp-sprint'
+  kind:
+    | 'sprint-link'
+    | 'tag-shared'
+    | 'daily-note'
+    | 'daily-sprint'
+    | 'imp-sprint'
+    | 'task-dependency'
+    | 'project-note'
+    | 'project-sprint'
+    | 'wikilink'
   color: string
   width: number
   dashed: boolean
@@ -69,6 +78,7 @@ const NOTE_TYPE_LABEL: Record<NoteType, string> = {
 
 const SPRINT_COLOR = '#7c3aed'
 const DAILY_COLOR = '#38bdf8'
+const PROJECT_COLOR = '#6366f1'
 const IMP_COLORS: Record<string, string> = {
   critical: '#ef4444',
   high: '#f97316',
@@ -119,11 +129,14 @@ interface BuildOptions {
   sprints: Sprint[]
   entries: DailyEntry[]
   impediments: Impediment[]
+  projects: Project[]
   showNoteTypes: Set<NoteType>
   showSprints: boolean
   showDaily: boolean
   showImpediments: boolean
+  showProjects: boolean
   sprintFilter: string
+  projectFilter: string
   dateFrom: string
   dateTo: string
   tagFilter: string
@@ -132,6 +145,8 @@ interface BuildOptions {
   linkSprint: boolean
   linkDaily: boolean
   linkImpediment: boolean
+  linkDependency: boolean
+  linkProject: boolean
   prevNodes?: GNode[]
   canvasW: number
   canvasH: number
@@ -143,11 +158,14 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
     sprints,
     entries,
     impediments,
+    projects,
     showNoteTypes,
     showSprints,
     showDaily,
     showImpediments,
+    showProjects,
     sprintFilter,
+    projectFilter,
     dateFrom,
     dateTo,
     tagFilter,
@@ -155,6 +173,8 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
     linkTag,
     linkSprint,
     linkDaily,
+    linkDependency,
+    linkProject,
     prevNodes,
     canvasW,
     canvasH,
@@ -213,6 +233,10 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
     if (sprintFilter && n.sprintId !== sprintFilter) continue
     if (dateFrom && n.updatedAt < dateFrom) continue
     if (dateTo && n.updatedAt > dateTo + 'T99') continue
+    if (projectFilter) {
+      const ids = n.projectIds ?? (n.projectId ? [n.projectId] : [])
+      if (!ids.includes(projectFilter)) continue
+    }
     const pp = prevPos(`note:${n.id}`)
     nodes.push({
       id: `note:${n.id}`,
@@ -281,6 +305,28 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
         mass: 1.1,
       })
       impSet.add(`imp:${imp.id}`)
+    }
+  }
+
+  // ── Projects ──
+  const projectSet = new Set<string>()
+  if (showProjects) {
+    for (const p of projects) {
+      if (p.archived) continue
+      const pp = prevPos(`project:${p.id}`)
+      nodes.push({
+        id: `project:${p.id}`,
+        kind: 'project',
+        label: truncate(p.name, 22),
+        subLabel: 'Proyecto',
+        color: p.color || PROJECT_COLOR,
+        borderColor: p.color || PROJECT_COLOR,
+        radius: 24,
+        ...pp,
+        pinned: false,
+        mass: 2,
+      })
+      projectSet.add(`project:${p.id}`)
     }
   }
 
@@ -384,6 +430,75 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
             })
           }
         }
+      }
+    }
+  }
+
+  // ── Edges: task dependencies (wikilinks [[title]]) ──
+  if (linkDependency) {
+    const titleToNodeId = new Map<string, string>()
+    for (const n of notes) {
+      titleToNodeId.set(n.title.toLowerCase().trim(), `note:${n.id}`)
+    }
+    const wikilinkRe = /\[\[([^\]]+)\]\]/g
+    for (const n of notes) {
+      const src = `note:${n.id}`
+      if (!allNodeIds.has(src)) continue
+      const matches = [...n.content.matchAll(wikilinkRe)]
+      const seen = new Set<string>()
+      for (const m of matches) {
+        const targetTitle = m[1].toLowerCase().trim()
+        const tgt = titleToNodeId.get(targetTitle)
+        if (!tgt || tgt === src) continue
+        if (!allNodeIds.has(tgt)) continue
+        const key = `${src}__${tgt}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        edges.push({
+          source: src,
+          target: tgt,
+          kind: 'task-dependency',
+          color: 'rgba(250,204,21,0.65)',
+          width: 2,
+          dashed: false,
+        })
+      }
+    }
+  }
+
+  // ── Edges: note → project ──
+  if (linkProject) {
+    for (const n of notes) {
+      const src = `note:${n.id}`
+      if (!allNodeIds.has(src)) continue
+      const ids = n.projectIds ?? (n.projectId ? [n.projectId] : [])
+      for (const pid of ids) {
+        const tgt = `project:${pid}`
+        if (!allNodeIds.has(tgt)) continue
+        edges.push({
+          source: src,
+          target: tgt,
+          kind: 'project-note',
+          color: 'rgba(99,102,241,0.45)',
+          width: 1.5,
+          dashed: false,
+        })
+      }
+    }
+    // impediment → project
+    for (const imp of impediments) {
+      if (!imp.projectId) continue
+      const src = `imp:${imp.id}`
+      const tgt = `project:${imp.projectId}`
+      if (allNodeIds.has(src) && allNodeIds.has(tgt)) {
+        edges.push({
+          source: src,
+          target: tgt,
+          kind: 'project-sprint',
+          color: 'rgba(99,102,241,0.3)',
+          width: 1,
+          dashed: true,
+        })
       }
     }
   }
@@ -530,6 +645,16 @@ function drawGraph(
       ctx.lineTo(node.x, node.y + r)
       ctx.lineTo(node.x - r, node.y)
       ctx.closePath()
+    } else if (node.kind === 'project') {
+      // Pentagon
+      for (let i = 0; i < 5; i++) {
+        const angle = ((Math.PI * 2) / 5) * i - Math.PI / 2
+        const x = node.x + r * Math.cos(angle)
+        const y = node.y + r * Math.sin(angle)
+        if (i === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      }
+      ctx.closePath()
     } else {
       ctx.arc(node.x, node.y, r, 0, Math.PI * 2)
     }
@@ -665,8 +790,12 @@ interface FilterPanelProps {
   setShowDaily: (v: boolean) => void
   showImpediments: boolean
   setShowImpediments: (v: boolean) => void
+  showProjects: boolean
+  setShowProjects: (v: boolean) => void
   sprintFilter: string
   setSprintFilter: (v: string) => void
+  projectFilter: string
+  setProjectFilter: (v: string) => void
   dateFrom: string
   setDateFrom: (v: string) => void
   dateTo: string
@@ -683,7 +812,12 @@ interface FilterPanelProps {
   setLinkDaily: (v: boolean) => void
   linkImpediment: boolean
   setLinkImpediment: (v: boolean) => void
+  linkDependency: boolean
+  setLinkDependency: (v: boolean) => void
+  linkProject: boolean
+  setLinkProject: (v: boolean) => void
   sprints: Sprint[]
+  projects: Project[]
   allTags: string[]
   nodeCount: number
   edgeCount: number
@@ -698,8 +832,12 @@ function FilterPanel({
   setShowDaily,
   showImpediments,
   setShowImpediments,
+  showProjects,
+  setShowProjects,
   sprintFilter,
   setSprintFilter,
+  projectFilter,
+  setProjectFilter,
   dateFrom,
   setDateFrom,
   dateTo,
@@ -716,7 +854,12 @@ function FilterPanel({
   setLinkDaily,
   linkImpediment,
   setLinkImpediment,
+  linkDependency,
+  setLinkDependency,
+  linkProject,
+  setLinkProject,
   sprints,
+  projects,
   allTags,
   nodeCount,
   edgeCount,
@@ -864,6 +1007,7 @@ function FilterPanel({
               { label: 'Sprints', value: showSprints, set: setShowSprints },
               { label: 'Daily entries', value: showDaily, set: setShowDaily },
               { label: 'Impedimentos', value: showImpediments, set: setShowImpediments },
+              { label: 'Proyectos', value: showProjects, set: setShowProjects },
             ].map(item => (
               <label
                 key={item.label}
@@ -917,6 +1061,8 @@ function FilterPanel({
               { label: 'Etiqueta compartida', value: linkTag, set: setLinkTag },
               { label: 'Daily → Nota', value: linkDaily, set: setLinkDaily },
               { label: 'Imp. → Sprint', value: linkImpediment, set: setLinkImpediment },
+              { label: 'Dependencias [[]]', value: linkDependency, set: setLinkDependency },
+              { label: 'Nota → Proyecto', value: linkProject, set: setLinkProject },
             ].map(item => (
               <label
                 key={item.label}
@@ -979,6 +1125,27 @@ function FilterPanel({
           </select>
         </Section>
 
+        {/* Project filter */}
+        {projects.length > 0 && (
+          <Section label="Proyecto">
+            <select
+              value={projectFilter}
+              onChange={e => setProjectFilter(e.target.value)}
+              className="input-base"
+              style={{ width: '100%', fontSize: 12 }}
+            >
+              <option value="">Todos los proyectos</option>
+              {projects
+                .filter(p => !p.archived)
+                .map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+          </Section>
+        )}
+
         {/* Tag filter */}
         {allTags.length > 0 && (
           <Section label="Etiqueta">
@@ -1025,7 +1192,9 @@ function FilterPanel({
             setShowSprints(true)
             setShowDaily(true)
             setShowImpediments(true)
+            setShowProjects(true)
             setSprintFilter('')
+            setProjectFilter('')
             setDateFrom('')
             setDateTo('')
             setTagFilter('')
@@ -1053,25 +1222,33 @@ function FilterPanel({
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {[
-            { shape: 'hex', label: 'Sprint' },
-            { shape: 'circle', label: 'Daily Entry' },
-            { shape: 'diamond', label: 'Impedimento' },
-            { shape: 'circle', label: 'Nota' },
+            { shape: 'hex', label: 'Sprint', color: '#7c3aed' },
+            { shape: 'circle', label: 'Daily Entry', color: '#38bdf8' },
+            { shape: 'diamond', label: 'Impedimento', color: '#ef4444' },
+            { shape: 'circle', label: 'Nota', color: '#94a3b8' },
+            { shape: 'pentagon', label: 'Proyecto', color: '#6366f1' },
           ].map(item => (
             <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <svg width="12" height="12" viewBox="0 0 14 14">
                 {item.shape === 'hex' ? (
                   <polygon
                     points="7,1 12.5,4 12.5,10 7,13 1.5,10 1.5,4"
-                    fill="var(--accent-glow)"
-                    stroke="var(--accent-400)"
+                    fill={item.color + '22'}
+                    stroke={item.color}
                     strokeWidth="1.2"
                   />
                 ) : item.shape === 'diamond' ? (
                   <polygon
                     points="7,1 13,7 7,13 1,7"
-                    fill="var(--accent-glow)"
-                    stroke="var(--accent-400)"
+                    fill={item.color + '22'}
+                    stroke={item.color}
+                    strokeWidth="1.2"
+                  />
+                ) : item.shape === 'pentagon' ? (
+                  <polygon
+                    points="7,1 13,5 11,12 3,12 1,5"
+                    fill={item.color + '22'}
+                    stroke={item.color}
                     strokeWidth="1.2"
                   />
                 ) : (
@@ -1079,8 +1256,8 @@ function FilterPanel({
                     cx="7"
                     cy="7"
                     r="5.5"
-                    fill="var(--accent-glow)"
-                    stroke="var(--accent-400)"
+                    fill={item.color + '22'}
+                    stroke={item.color}
                     strokeWidth="1.2"
                   />
                 )}
@@ -1088,6 +1265,44 @@ function FilterPanel({
               <span style={{ color: 'var(--text-2)', fontSize: 11 }}>{item.label}</span>
             </div>
           ))}
+          <div style={{ marginTop: 4, borderTop: '1px solid var(--border-1)', paddingTop: 4 }}>
+            <div
+              style={{
+                fontSize: 10,
+                color: 'var(--text-3)',
+                marginBottom: 3,
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}
+            >
+              Aristas
+            </div>
+            {[
+              { color: 'rgba(124,58,237,0.7)', label: '→ Sprint', dashed: false },
+              { color: 'rgba(250,204,21,0.8)', label: 'Dependencia [[]]', dashed: false },
+              { color: 'rgba(99,102,241,0.7)', label: '→ Proyecto', dashed: false },
+              { color: 'rgba(56,189,248,0.7)', label: 'Daily → Nota', dashed: true },
+              { color: 'rgba(148,163,184,0.5)', label: 'Etiqueta compartida', dashed: true },
+            ].map(item => (
+              <div
+                key={item.label}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}
+              >
+                <svg width="22" height="8" viewBox="0 0 22 8">
+                  <line
+                    x1="1"
+                    y1="4"
+                    x2="21"
+                    y2="4"
+                    stroke={item.color}
+                    strokeWidth="1.8"
+                    strokeDasharray={item.dashed ? '4 3' : undefined}
+                  />
+                </svg>
+                <span style={{ color: 'var(--text-2)', fontSize: 11 }}>{item.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -1102,6 +1317,7 @@ interface NodeDetailProps {
   sprints: Sprint[]
   entries: DailyEntry[]
   impediments: Impediment[]
+  projects: Project[]
   connectedNodes: GNode[]
   onClose: () => void
   onNavigate: (node: GNode) => void
@@ -1113,6 +1329,7 @@ function NodeDetail({
   sprints,
   entries,
   impediments,
+  projects,
   connectedNodes,
   onClose,
   onNavigate,
@@ -1206,6 +1423,19 @@ function NodeDetail({
           {imp.resolvedAt && <KV k="Resuelto" v={fmtDate(imp.resolvedAt)} color="#34d399" />}
           {imp.responsible && <KV k="Responsable" v={imp.responsible} />}
           {imp.description && <KV k="Descripción" v={imp.description} />}
+        </div>
+      )
+  } else if (node.kind === 'project') {
+    const id = node.id.replace('project:', '')
+    const p = projects.find(p => p.id === id)
+    if (p)
+      detail = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <KV k="Color" v={p.color} color={p.color} />
+          {p.description && <KV k="Descripción" v={p.description} />}
+          {p.techStack.length > 0 && <KV k="Tech stack" v={p.techStack.join(', ')} />}
+          {p.repoFullNames.length > 0 && <KV k="Repositorios" v={p.repoFullNames.join(', ')} />}
+          <KV k="Creado" v={fmtDate(p.createdAt.split('T')[0])} />
         </div>
       )
   }
@@ -1619,13 +1849,16 @@ export default function NotesMapPage() {
   const sprints = useAppSelector(s => s.daily.sprints)
   const entries = useAppSelector(s => s.daily.entries)
   const impediments = useAppSelector(s => s.impediments.impediments)
+  const projects = useAppSelector(s => s.projects.projects)
 
   // ── Filter state ──
   const [showNoteTypes, setShowNoteTypes] = useState<Set<NoteType>>(new Set(ALL_NOTE_TYPES))
   const [showSprints, setShowSprints] = useState(true)
   const [showDaily, setShowDaily] = useState(true)
   const [showImpediments, setShowImpediments] = useState(true)
+  const [showProjects, setShowProjects] = useState(true)
   const [sprintFilter, setSprintFilter] = useState('')
+  const [projectFilter, setProjectFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [tagFilter, setTagFilter] = useState('')
@@ -1634,6 +1867,8 @@ export default function NotesMapPage() {
   const [linkSprint, setLinkSprint] = useState(true)
   const [linkDaily, setLinkDaily] = useState(true)
   const [linkImpediment, setLinkImpediment] = useState(true)
+  const [linkDependency, setLinkDependency] = useState(true)
+  const [linkProject, setLinkProject] = useState(true)
 
   // ── Physics state ──
   const [physics, setPhysics] = useState<PhysicsParams>({ ...DEFAULT_PHYSICS })
@@ -1674,11 +1909,14 @@ export default function NotesMapPage() {
       sprints,
       entries,
       impediments,
+      projects,
       showNoteTypes,
       showSprints,
       showDaily,
       showImpediments,
+      showProjects,
       sprintFilter,
+      projectFilter,
       dateFrom,
       dateTo,
       tagFilter,
@@ -1687,6 +1925,8 @@ export default function NotesMapPage() {
       linkSprint,
       linkDaily,
       linkImpediment,
+      linkDependency,
+      linkProject,
       prevNodes: nodesRef.current,
       canvasW: w,
       canvasH: h,
@@ -1700,11 +1940,14 @@ export default function NotesMapPage() {
     sprints,
     entries,
     impediments,
+    projects,
     showNoteTypes,
     showSprints,
     showDaily,
     showImpediments,
+    showProjects,
     sprintFilter,
+    projectFilter,
     dateFrom,
     dateTo,
     tagFilter,
@@ -1713,6 +1956,8 @@ export default function NotesMapPage() {
     linkSprint,
     linkDaily,
     linkImpediment,
+    linkDependency,
+    linkProject,
   ])
 
   // ── Animation loop ──
@@ -1884,6 +2129,7 @@ export default function NotesMapPage() {
     else if (node.kind === 'sprint') navigate('/sprints')
     else if (node.kind === 'daily') navigate(`/daily/${node.id.replace('daily:', '')}`)
     else if (node.kind === 'impediment') navigate('/impediments')
+    else if (node.kind === 'project') navigate(`/projects?id=${node.id.replace('project:', '')}`)
   }
 
   // ── Zoom controls ──
@@ -2078,8 +2324,12 @@ export default function NotesMapPage() {
         setShowDaily={setShowDaily}
         showImpediments={showImpediments}
         setShowImpediments={setShowImpediments}
+        showProjects={showProjects}
+        setShowProjects={setShowProjects}
         sprintFilter={sprintFilter}
         setSprintFilter={setSprintFilter}
+        projectFilter={projectFilter}
+        setProjectFilter={setProjectFilter}
         dateFrom={dateFrom}
         setDateFrom={setDateFrom}
         dateTo={dateTo}
@@ -2096,7 +2346,12 @@ export default function NotesMapPage() {
         setLinkDaily={setLinkDaily}
         linkImpediment={linkImpediment}
         setLinkImpediment={setLinkImpediment}
+        linkDependency={linkDependency}
+        setLinkDependency={setLinkDependency}
+        linkProject={linkProject}
+        setLinkProject={setLinkProject}
         sprints={sprints}
+        projects={projects}
         allTags={allTags}
         nodeCount={nodesRef.current.length}
         edgeCount={edgesRef.current.length}
@@ -2110,6 +2365,7 @@ export default function NotesMapPage() {
           sprints={sprints}
           entries={entries}
           impediments={impediments}
+          projects={projects}
           connectedNodes={connectedNodes}
           onClose={() => setSelectedId(null)}
           onNavigate={navigateToNode}
