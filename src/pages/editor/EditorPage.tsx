@@ -1058,63 +1058,52 @@ export default function EditorPage() {
             const proj = activeProjects[0]
             return (
               <button
-                title={`Proyecto: ${proj.name} — clic para ir a Proyectos`}
-                onClick={() => navigate('/projects')}
+                title={`Proyecto: ${proj.name} — ir a Proyectos`}
+                onClick={() => navigate(`/projects?project=${proj.id}`)}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '5px',
                   height: '22px',
-                  padding: '0 8px',
+                  padding: '0 7px',
                   borderRadius: '99px',
-                  border: `1px solid ${proj.color}44`,
-                  background: proj.color + '18',
+                  border: `1px solid ${proj.color}33`,
+                  background: proj.color + '12',
                   color: proj.color,
                   cursor: 'pointer',
                   fontFamily: 'var(--font-ui)',
                   fontSize: '11px',
                   fontWeight: 500,
                   flexShrink: 0,
-                  transition: 'all var(--transition-fast)',
-                  maxWidth: '140px',
                   overflow: 'hidden',
+                  maxWidth: '26px',
+                  transition: 'max-width 220ms ease, opacity 150ms, border-color 150ms',
+                  opacity: 0.55,
+                  whiteSpace: 'nowrap',
                 }}
                 onMouseEnter={e => {
                   const el = e.currentTarget as HTMLElement
-                  el.style.background = proj.color + '30'
-                  el.style.borderColor = proj.color + '88'
+                  el.style.maxWidth = '160px'
+                  el.style.opacity = '1'
+                  el.style.borderColor = proj.color + '66'
                 }}
                 onMouseLeave={e => {
                   const el = e.currentTarget as HTMLElement
-                  el.style.background = proj.color + '18'
-                  el.style.borderColor = proj.color + '44'
+                  el.style.maxWidth = '26px'
+                  el.style.opacity = '0.55'
+                  el.style.borderColor = proj.color + '33'
                 }}
               >
                 <span
                   style={{
-                    width: '7px',
-                    height: '7px',
+                    width: '8px',
+                    height: '8px',
                     borderRadius: '2px',
                     background: proj.color,
                     flexShrink: 0,
                   }}
                 />
-                <span
-                  style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                >
-                  {proj.name}
-                </span>
-                <svg
-                  width="9"
-                  height="9"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  style={{ flexShrink: 0, opacity: 0.7 }}
-                >
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{proj.name}</span>
               </button>
             )
           }
@@ -1122,61 +1111,59 @@ export default function EditorPage() {
           // Multiple projects — show stacked dots + count
           return (
             <button
-              title={activeProjects.map(p => p.name).join(', ') + ' — clic para ir a Proyectos'}
-              onClick={() => navigate('/projects')}
+              title={activeProjects.map(p => p.name).join(', ') + ' — ir a Proyectos'}
+              onClick={() => navigate(`/projects?project=${activeProjects[0].id}`)}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '5px',
                 height: '22px',
-                padding: '0 8px',
+                padding: '0 5px',
                 borderRadius: '99px',
-                border: '1px solid var(--border-2)',
-                background: 'var(--bg-3)',
-                color: 'var(--text-2)',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-3)',
                 cursor: 'pointer',
-                fontFamily: 'var(--font-ui)',
-                fontSize: '11px',
-                fontWeight: 500,
                 flexShrink: 0,
-                transition: 'all var(--transition-fast)',
+                overflow: 'hidden',
+                maxWidth: '26px',
+                transition: 'max-width 220ms ease, opacity 150ms, color 150ms',
+                opacity: 0.5,
+                whiteSpace: 'nowrap',
               }}
               onMouseEnter={e => {
-                ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-4, var(--bg-3))'
+                const el = e.currentTarget as HTMLElement
+                el.style.maxWidth = '160px'
+                el.style.opacity = '1'
+                el.style.color = 'var(--text-1)'
               }}
               onMouseLeave={e => {
-                ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+                const el = e.currentTarget as HTMLElement
+                el.style.maxWidth = '26px'
+                el.style.opacity = '0.5'
+                el.style.color = 'var(--text-3)'
               }}
             >
               {/* Stacked color dots */}
-              <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
                 {activeProjects.slice(0, 3).map((p, i) => (
                   <span
                     key={p.id}
                     style={{
-                      width: '8px',
-                      height: '8px',
+                      width: '7px',
+                      height: '7px',
                       borderRadius: '2px',
                       background: p.color,
                       flexShrink: 0,
-                      marginLeft: i === 0 ? 0 : '-3px',
-                      outline: '1.5px solid var(--bg-3)',
+                      marginLeft: i === 0 ? 0 : '-2px',
+                      outline: '1.5px solid var(--bg-1)',
                     }}
                   />
                 ))}
               </span>
-              {activeProjects.length} proyectos
-              <svg
-                width="9"
-                height="9"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                style={{ flexShrink: 0, opacity: 0.7 }}
-              >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
+              <span style={{ fontFamily: 'var(--font-ui)', fontSize: '11px', fontWeight: 500 }}>
+                {activeProjects.length} proyectos
+              </span>
             </button>
           )
         })()}
@@ -1195,17 +1182,40 @@ export default function EditorPage() {
               alignItems: 'center',
               gap: '5px',
               height: '28px',
-              padding: '0 8px',
+              padding: '0 7px',
               borderRadius: 'var(--radius-md)',
-              border: `1px solid ${showMeta ? 'var(--accent-500)' : 'var(--border-2)'}`,
-              background: showMeta ? 'var(--accent-glow)' : 'var(--bg-2)',
-              color: 'var(--accent-400)',
+              border: `1px solid ${showMeta ? 'var(--accent-500)' : 'transparent'}`,
+              background: showMeta ? 'var(--accent-glow)' : 'transparent',
+              color: showMeta ? 'var(--accent-400)' : 'var(--text-2)',
               cursor: 'pointer',
               fontFamily: 'var(--font-ui)',
               fontSize: '11px',
               fontWeight: 500,
-              transition: 'all var(--transition-fast)',
+              transition:
+                'max-width 220ms ease, opacity 150ms, background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast)',
               flexShrink: 0,
+              overflow: 'hidden',
+              maxWidth: showMeta ? '140px' : '30px',
+              opacity: showMeta ? 1 : 0.45,
+              whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={e => {
+              const el = e.currentTarget as HTMLElement
+              if (!showMeta) {
+                el.style.maxWidth = '140px'
+                el.style.opacity = '1'
+                el.style.background = 'var(--bg-3)'
+                el.style.color = 'var(--text-1)'
+              }
+            }}
+            onMouseLeave={e => {
+              const el = e.currentTarget as HTMLElement
+              if (!showMeta) {
+                el.style.maxWidth = '30px'
+                el.style.opacity = '0.45'
+                el.style.background = 'transparent'
+                el.style.color = 'var(--text-2)'
+              }
             }}
           >
             <NoteTypeIcon type={note.noteType} size={13} />
@@ -1763,8 +1773,23 @@ export default function EditorPage() {
               border: 'none',
               background: showColorPicker ? 'var(--bg-3)' : 'transparent',
               cursor: 'pointer',
-              transition: 'background var(--transition-fast)',
+              transition: 'background var(--transition-fast), opacity var(--transition-fast)',
               flexShrink: 0,
+              opacity: showColorPicker ? 1 : 0.4,
+            }}
+            onMouseEnter={e => {
+              const el = e.currentTarget as HTMLElement
+              if (!showColorPicker) {
+                el.style.background = 'var(--bg-3)'
+                el.style.opacity = '1'
+              }
+            }}
+            onMouseLeave={e => {
+              const el = e.currentTarget as HTMLElement
+              if (!showColorPicker) {
+                el.style.background = 'transparent'
+                el.style.opacity = '0.4'
+              }
             }}
           >
             <svg
@@ -1855,12 +1880,21 @@ export default function EditorPage() {
             cursor: 'pointer',
             transition: 'all var(--transition-fast)',
             flexShrink: 0,
+            opacity: note.pinned ? 1 : 0.4,
           }}
           onMouseEnter={e => {
-            if (!note.pinned) (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+            const el = e.currentTarget as HTMLElement
+            if (!note.pinned) {
+              el.style.background = 'var(--bg-3)'
+              el.style.opacity = '1'
+            }
           }}
           onMouseLeave={e => {
-            if (!note.pinned) (e.currentTarget as HTMLElement).style.background = 'transparent'
+            const el = e.currentTarget as HTMLElement
+            if (!note.pinned) {
+              el.style.background = 'transparent'
+              el.style.opacity = '0.4'
+            }
           }}
         >
           <svg
@@ -1893,12 +1927,21 @@ export default function EditorPage() {
             cursor: 'pointer',
             transition: 'all var(--transition-fast)',
             flexShrink: 0,
+            opacity: focusMode ? 1 : 0.4,
           }}
           onMouseEnter={e => {
-            if (!focusMode) (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+            const el = e.currentTarget as HTMLElement
+            if (!focusMode) {
+              el.style.background = 'var(--bg-3)'
+              el.style.opacity = '1'
+            }
           }}
           onMouseLeave={e => {
-            if (!focusMode) (e.currentTarget as HTMLElement).style.background = 'transparent'
+            const el = e.currentTarget as HTMLElement
+            if (!focusMode) {
+              el.style.background = 'transparent'
+              el.style.opacity = '0.4'
+            }
           }}
         >
           <svg
@@ -1939,12 +1982,21 @@ export default function EditorPage() {
               cursor: 'pointer',
               transition: 'background var(--transition-fast)',
               flexShrink: 0,
+              opacity: showMore ? 1 : 0.4,
             }}
             onMouseEnter={e => {
-              if (!showMore) (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+              const el = e.currentTarget as HTMLElement
+              if (!showMore) {
+                el.style.background = 'var(--bg-3)'
+                el.style.opacity = '1'
+              }
             }}
             onMouseLeave={e => {
-              if (!showMore) (e.currentTarget as HTMLElement).style.background = 'transparent'
+              const el = e.currentTarget as HTMLElement
+              if (!showMore) {
+                el.style.background = 'transparent'
+                el.style.opacity = '0.4'
+              }
             }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -2245,7 +2297,7 @@ export default function EditorPage() {
               key={m}
               onClick={() => dispatch(setEditorPreviewMode(m))}
               style={{
-                padding: '3px 10px',
+                padding: '3px 8px',
                 borderRadius: 'var(--radius-sm)',
                 border: 'none',
                 cursor: 'pointer',
@@ -2254,7 +2306,22 @@ export default function EditorPage() {
                 fontWeight: mode === m ? 600 : 400,
                 transition: 'all var(--transition-fast)',
                 background: mode === m ? 'var(--accent-600)' : 'transparent',
-                color: mode === m ? '#fff' : 'var(--text-2)',
+                color: mode === m ? '#fff' : 'var(--text-3)',
+                opacity: mode === m ? 1 : 0.6,
+              }}
+              onMouseEnter={e => {
+                const el = e.currentTarget as HTMLElement
+                if (mode !== m) {
+                  el.style.opacity = '1'
+                  el.style.color = 'var(--text-1)'
+                }
+              }}
+              onMouseLeave={e => {
+                const el = e.currentTarget as HTMLElement
+                if (mode !== m) {
+                  el.style.opacity = '0.6'
+                  el.style.color = 'var(--text-3)'
+                }
               }}
             >
               {modeLabels[m]}
@@ -2307,16 +2374,22 @@ export default function EditorPage() {
                     cursor: 'pointer',
                     color: 'var(--text-2)',
                     background: 'transparent',
-                    transition: 'background var(--transition-fast), color var(--transition-fast)',
+                    transition:
+                      'background var(--transition-fast), color var(--transition-fast), opacity var(--transition-fast)',
                     flexShrink: 0,
+                    opacity: 0.45,
                   }}
                   onMouseEnter={e => {
-                    ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
-                    ;(e.currentTarget as HTMLElement).style.color = 'var(--text-0)'
+                    const el = e.currentTarget as HTMLElement
+                    el.style.background = 'var(--bg-3)'
+                    el.style.color = 'var(--text-0)'
+                    el.style.opacity = '1'
                   }}
                   onMouseLeave={e => {
-                    ;(e.currentTarget as HTMLElement).style.background = 'transparent'
-                    ;(e.currentTarget as HTMLElement).style.color = 'var(--text-2)'
+                    const el = e.currentTarget as HTMLElement
+                    el.style.background = 'transparent'
+                    el.style.color = 'var(--text-2)'
+                    el.style.opacity = '0.45'
                   }}
                 >
                   <FmtIcon cmd={btn.cmd} label={btn.label} />
@@ -2346,16 +2419,24 @@ export default function EditorPage() {
               borderRadius: 'var(--radius-sm)',
               border: 'none',
               cursor: 'pointer',
-              color: 'var(--accent-400)',
-              background: 'var(--accent-glow)',
-              transition: 'background var(--transition-fast), color var(--transition-fast)',
+              color: 'var(--text-2)',
+              background: 'transparent',
+              transition:
+                'background var(--transition-fast), color var(--transition-fast), opacity var(--transition-fast)',
               flexShrink: 0,
+              opacity: 0.45,
             }}
             onMouseEnter={e => {
-              ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+              const el = e.currentTarget as HTMLElement
+              el.style.background = 'var(--bg-3)'
+              el.style.color = 'var(--text-0)'
+              el.style.opacity = '1'
             }}
             onMouseLeave={e => {
-              ;(e.currentTarget as HTMLElement).style.background = 'var(--accent-glow)'
+              const el = e.currentTarget as HTMLElement
+              el.style.background = 'transparent'
+              el.style.color = 'var(--text-2)'
+              el.style.opacity = '0.45'
             }}
           >
             <svg

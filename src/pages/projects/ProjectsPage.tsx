@@ -7,7 +7,7 @@
  * impedimentos y dailys.
  */
 import { useState, useMemo, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '@/store'
 import {
   addProject,
@@ -1759,7 +1759,10 @@ export default function ProjectsPage() {
 
   const [search, setSearch] = useState('')
   const [showArchived, setShowArchived] = useState(false)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [searchParams] = useSearchParams()
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => searchParams.get('project') ?? null
+  )
   const [formOpen, setFormOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Project | null>(null)
   const [importOpen, setImportOpen] = useState(false)
