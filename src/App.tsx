@@ -6,11 +6,7 @@ import { gitDetect } from '@/store/slices/gitSlice'
 import { hydrateAttachments } from '@/store/slices/notesSlice'
 import { loadAllAttachmentBlobs, saveAttachmentBlob } from '@/lib/attachmentsDb'
 import InstallPrompt from '@/components/pwa/InstallPrompt'
-import LockScreen, {
-  touchActivity,
-  getLastActivity,
-  clearActivity,
-} from '@/components/security/LockScreen'
+import LockScreen, { touchActivity, getLastActivity } from '@/components/security/LockScreen'
 
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll']
 

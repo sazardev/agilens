@@ -564,7 +564,7 @@ function ImpedimentCard({ imp, sprintName, onEdit, onDelete, onQuickResolve }: C
     borderRadius: '2px',
   }
 
-  const addLinkBtn = (label: string, type: 'task' | 'daily'): React.CSSProperties => ({
+  const addLinkBtn = (_label: string, type: 'task' | 'daily'): React.CSSProperties => ({
     display: 'inline-flex',
     alignItems: 'center',
     gap: '3px',
