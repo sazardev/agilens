@@ -119,6 +119,15 @@ const notesSlice = createSlice({
       const note = state.notes.find(n => n.id === action.payload.id)
       if (note) note.projectId = action.payload.projectId
     },
+    /** Set multiple projects for a note */
+    setNoteProjects(state, action: PayloadAction<{ id: string; projectIds: string[] }>) {
+      const note = state.notes.find(n => n.id === action.payload.id)
+      if (note) {
+        note.projectIds = action.payload.projectIds
+        // Keep legacy projectId in sync with first element
+        note.projectId = action.payload.projectIds[0]
+      }
+    },
   },
 })
 
@@ -141,6 +150,7 @@ export const {
   setNotePriority,
   setStoryPoints,
   setNoteProject,
+  setNoteProjects,
 } = notesSlice.actions
 
 export default notesSlice.reducer

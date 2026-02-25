@@ -14,6 +14,7 @@ import {
   toggleNoteLocked,
   setNoteColor,
   setNoteProject,
+  setNoteProjects,
 } from '@/store/slices/notesSlice'
 import type { NoteAttachment, NoteType } from '@/types'
 import { NOTE_TYPE_META } from '@/types'
@@ -401,9 +402,18 @@ export default function EditorPage() {
     dispatch(setNoteFolder({ noteId: note.id, folderId }))
   }
 
-  function handleSetProject(projectId: string | null) {
+  function handleToggleProject(projId: string) {
     if (!note) return
-    dispatch(setNoteProject({ id: note.id, projectId: projectId ?? undefined }))
+    const current = note.projectIds ?? (note.projectId ? [note.projectId] : [])
+    const next = current.includes(projId)
+      ? current.filter(id => id !== projId)
+      : [...current, projId]
+    dispatch(setNoteProjects({ id: note.id, projectIds: next }))
+  }
+
+  function handleClearProjects() {
+    if (!note) return
+    dispatch(setNoteProjects({ id: note.id, projectIds: [] }))
   }
 
   // ── Close meta/export/color/more dropdowns when clicking outside ────────────
@@ -1036,11 +1046,17 @@ export default function EditorPage() {
           )}
         </span>
 
-        {/* ── Project badge ── */}
-        {note.projectId &&
-          (() => {
-            const proj = projects.find(p => p.id === note.projectId)
-            return proj ? (
+        {/* ── Project badge(s) ── */}
+        {(() => {
+          const activeIds = note.projectIds ?? (note.projectId ? [note.projectId] : [])
+          const activeProjects = activeIds
+            .map(id => projects.find(p => p.id === id))
+            .filter((p): p is NonNullable<typeof p> => !!p)
+          if (activeProjects.length === 0) return null
+
+          if (activeProjects.length === 1) {
+            const proj = activeProjects[0]
+            return (
               <button
                 title={`Proyecto: ${proj.name} — clic para ir a Proyectos`}
                 onClick={() => navigate('/projects')}
@@ -1084,11 +1100,7 @@ export default function EditorPage() {
                   }}
                 />
                 <span
-                  style={{
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
+                  style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                 >
                   {proj.name}
                 </span>
@@ -1104,8 +1116,70 @@ export default function EditorPage() {
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
-            ) : null
-          })()}
+            )
+          }
+
+          // Multiple projects — show stacked dots + count
+          return (
+            <button
+              title={activeProjects.map(p => p.name).join(', ') + ' — clic para ir a Proyectos'}
+              onClick={() => navigate('/projects')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                height: '22px',
+                padding: '0 8px',
+                borderRadius: '99px',
+                border: '1px solid var(--border-2)',
+                background: 'var(--bg-3)',
+                color: 'var(--text-2)',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-ui)',
+                fontSize: '11px',
+                fontWeight: 500,
+                flexShrink: 0,
+                transition: 'all var(--transition-fast)',
+              }}
+              onMouseEnter={e => {
+                ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-4, var(--bg-3))'
+              }}
+              onMouseLeave={e => {
+                ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
+              }}
+            >
+              {/* Stacked color dots */}
+              <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                {activeProjects.slice(0, 3).map((p, i) => (
+                  <span
+                    key={p.id}
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '2px',
+                      background: p.color,
+                      flexShrink: 0,
+                      marginLeft: i === 0 ? 0 : '-3px',
+                      outline: '1.5px solid var(--bg-3)',
+                    }}
+                  />
+                ))}
+              </span>
+              {activeProjects.length} proyectos
+              <svg
+                width="9"
+                height="9"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                style={{ flexShrink: 0, opacity: 0.7 }}
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          )
+        })()}
 
         {/* ── Metadata panel button ── */}
         <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -1355,91 +1429,87 @@ export default function EditorPage() {
 
               <div style={{ height: '1px', background: 'var(--border-1)', margin: '0 12px' }} />
 
-              {/* ── Proyecto ── */}
+              {/* ── Proyecto (multi-select) ── */}
               <div style={{ padding: '10px 12px 8px' }}>
-                <p
+                <div
                   style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '10px',
-                    color: 'var(--text-3)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.07em',
-                    margin: '0 0 6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '6px',
                   }}
                 >
-                  Proyecto
-                </p>
+                  <p
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '10px',
+                      color: 'var(--text-3)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.07em',
+                      margin: 0,
+                    }}
+                  >
+                    Proyecto
+                  </p>
+                  {(() => {
+                    const activeIds = note.projectIds ?? (note.projectId ? [note.projectId] : [])
+                    return activeIds.length > 0 ? (
+                      <button
+                        onClick={handleClearProjects}
+                        title="Quitar todos los proyectos"
+                        style={{
+                          fontSize: '10px',
+                          fontFamily: 'var(--font-ui)',
+                          color: 'var(--text-3)',
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '0 2px',
+                        }}
+                        onMouseEnter={e => {
+                          ;(e.currentTarget as HTMLElement).style.color = '#ef4444'
+                        }}
+                        onMouseLeave={e => {
+                          ;(e.currentTarget as HTMLElement).style.color = 'var(--text-3)'
+                        }}
+                      >
+                        Quitar todos
+                      </button>
+                    ) : null
+                  })()}
+                </div>
                 <div
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '2px',
-                    maxHeight: '130px',
+                    maxHeight: '160px',
                     overflowY: 'auto',
                   }}
                 >
-                  <button
-                    onClick={() => handleSetProject(null)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '7px',
-                      padding: '5px 8px',
-                      borderRadius: 'var(--radius-sm)',
-                      border: `1px solid ${!note.projectId ? 'var(--accent-500)' : 'transparent'}`,
-                      background: !note.projectId ? 'var(--accent-glow)' : 'transparent',
-                      color: !note.projectId ? 'var(--accent-400)' : 'var(--text-3)',
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font-ui)',
-                      fontSize: '12px',
-                      textAlign: 'left' as const,
-                      transition: 'all var(--transition-fast)',
-                    }}
-                    onMouseEnter={e => {
-                      if (note.projectId)
-                        (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
-                    }}
-                    onMouseLeave={e => {
-                      if (note.projectId)
-                        (e.currentTarget as HTMLElement).style.background = 'transparent'
-                    }}
-                  >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="8" x2="12" y2="16" />
-                      <line x1="8" y1="12" x2="16" y2="12" />
-                    </svg>
-                    Sin proyecto
-                  </button>
                   {projects.map(project => {
-                    const isActive = note.projectId === project.id
+                    const activeIds = note.projectIds ?? (note.projectId ? [note.projectId] : [])
+                    const isActive = activeIds.includes(project.id)
                     return (
                       <button
                         key={project.id}
-                        onClick={() => handleSetProject(project.id)}
+                        onClick={() => handleToggleProject(project.id)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           gap: '7px',
                           padding: '5px 8px',
                           borderRadius: 'var(--radius-sm)',
-                          border: `1px solid ${isActive ? 'var(--accent-500)' : 'transparent'}`,
-                          background: isActive ? 'var(--accent-glow)' : 'transparent',
-                          color: isActive ? 'var(--accent-400)' : 'var(--text-1)',
+                          border: `1px solid ${isActive ? project.color + '55' : 'transparent'}`,
+                          background: isActive ? project.color + '18' : 'transparent',
+                          color: isActive ? project.color : 'var(--text-1)',
                           cursor: 'pointer',
                           fontFamily: 'var(--font-ui)',
                           fontSize: '12px',
                           textAlign: 'left' as const,
                           transition: 'all var(--transition-fast)',
                           overflow: 'hidden',
-                          whiteSpace: 'nowrap',
+                          whiteSpace: 'nowrap' as const,
                           textOverflow: 'ellipsis',
                         }}
                         onMouseEnter={e => {
@@ -1451,23 +1521,47 @@ export default function EditorPage() {
                             (e.currentTarget as HTMLElement).style.background = 'transparent'
                         }}
                       >
+                        {/* Checkbox visual */}
                         <span
                           style={{
-                            width: '10px',
-                            height: '10px',
+                            width: '13px',
+                            height: '13px',
                             borderRadius: '3px',
+                            border: `1.5px solid ${isActive ? project.color : 'var(--border-2)'}`,
+                            background: isActive ? project.color : 'transparent',
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all var(--transition-fast)',
+                          }}
+                        >
+                          {isActive && (
+                            <svg
+                              width="8"
+                              height="8"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="white"
+                              strokeWidth="3"
+                            >
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          )}
+                        </span>
+                        {/* Color dot */}
+                        <span
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '2px',
                             background: project.color,
                             flexShrink: 0,
                           }}
                         />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
                           {project.name}
                         </span>
-                        {isActive && (
-                          <span style={{ marginLeft: 'auto', fontSize: '10px', opacity: 0.7 }}>
-                            ✓
-                          </span>
-                        )}
                       </button>
                     )
                   })}

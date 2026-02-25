@@ -67,7 +67,8 @@ export interface Note {
   kanbanStatus?: KanbanStatus // estado para el tablero kanban
   priority?: TaskPriority // prioridad de la tarea
   storyPoints?: number // story points de la tarea
-  projectId?: string // proyecto al que pertenece esta nota
+  projectId?: string // proyecto al que pertenece esta nota (legacy — preferir projectIds)
+  projectIds?: string[] // proyectos vinculados a esta nota (multi-proyecto)
 }
 
 // ─── Folders ──────────────────────────────────────────────────────────────────

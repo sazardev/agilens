@@ -18,7 +18,7 @@ import {
   linkRepo,
   unlinkRepo,
 } from '@/store/slices/projectsSlice'
-import { setNoteProject } from '@/store/slices/notesSlice'
+import { setNoteProject, setNoteProjects } from '@/store/slices/notesSlice'
 import type { Project, ProjectIconName, NoteType } from '@/types'
 import { NOTE_TYPE_META } from '@/types'
 import { PROJECT_ICON_COMPONENTS, PROJECT_ICON_LABELS, ProjectIcon } from '@/lib/projectIcons'
@@ -1074,7 +1074,8 @@ function ProjectDetail({
   const allSprints = useAppSelector(s => s.daily.sprints)
   const allImpediments = useAppSelector(s => s.impediments.impediments)
   const notes = useMemo(
-    () => allNotes.filter(n => n.projectId === project.id),
+    () =>
+      allNotes.filter(n => n.projectId === project.id || (n.projectIds ?? []).includes(project.id)),
     [allNotes, project.id]
   )
   const sprints = useMemo(
@@ -1615,7 +1616,9 @@ function ProjectDetail({
                       <button
                         onClick={e => {
                           e.stopPropagation()
-                          dispatch(setNoteProject({ id: n.id, projectId: undefined }))
+                          const current = n.projectIds ?? (n.projectId ? [n.projectId] : [])
+                          const next = current.filter(id => id !== project.id)
+                          dispatch(setNoteProjects({ id: n.id, projectIds: next }))
                         }}
                         title="Desvincular nota"
                         style={{
