@@ -4,6 +4,7 @@ import { updateNote } from '@/store/slices/notesSlice'
 import { GIT_DIR } from '@/store/slices/gitSlice'
 import { getNoteLog, getFileContentAtCommit } from '@/lib/git/client'
 import type { GitCommit } from '@/types'
+import ChangelogModal from '@/components/layout/ChangelogModal'
 
 // ─── Line diff (Myers / LCS) ──────────────────────────────────────────────────
 
@@ -1049,6 +1050,7 @@ export default function StatusBar() {
   const mode = useAppSelector(s => s.ui.editorPreviewMode)
 
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [changelogOpen, setChangelogOpen] = useState(false)
 
   // Close history when the user switches notes
   useEffect(() => {
@@ -1076,6 +1078,7 @@ export default function StatusBar() {
           onClose={() => setHistoryOpen(false)}
         />
       )}
+      {changelogOpen && <ChangelogModal onClose={() => setChangelogOpen(false)} />}
 
       <footer
         style={{
@@ -1176,7 +1179,31 @@ export default function StatusBar() {
             </>
           )}
           <span style={{ opacity: 0.4 }}>|</span>
-          <span style={{ color: 'rgba(255,255,255,0.5)' }}>v{__APP_VERSION__}</span>
+          <button
+            title="Ver historial de versiones"
+            onClick={() => setChangelogOpen(v => !v)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '10px',
+              color: 'rgba(255,255,255,0.5)',
+              padding: '1px 4px',
+              borderRadius: '3px',
+              transition: 'color 0.15s, background 0.15s',
+            }}
+            onMouseEnter={e => {
+              ;(e.currentTarget as HTMLElement).style.color = '#fff'
+              ;(e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.12)'
+            }}
+            onMouseLeave={e => {
+              ;(e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'
+              ;(e.currentTarget as HTMLElement).style.background = 'transparent'
+            }}
+          >
+            v{__APP_VERSION__}
+          </button>
         </div>
       </footer>
     </>

@@ -460,17 +460,9 @@ function FileRow({ path, status, title }: { path: string; status: string; title:
 
 export default function GitPage() {
   const dispatch = useAppDispatch()
-  const {
-    initialized,
-    status,
-    log,
-    branches,
-    currentBranch,
-    loading,
-    error,
-    pushStatus,
-    pullStatus,
-  } = useAppSelector(s => s.git)
+  const { initialized, status, log, branches, currentBranch, loading, error, pushStatus } =
+    useAppSelector(s => s.git)
+  const pullStatus = useAppSelector(s => s.git.pullStatus)
   const settings = useAppSelector(s => s.settings)
   const notes = useAppSelector(s => s.notes.notes)
   const [commitMsg, setCommitMsg] = useState('')
@@ -1171,22 +1163,36 @@ export default function GitPage() {
                 ? 'Procesando…'
                 : `Commit · ${status.length} archivo${status.length !== 1 ? 's' : ''}`}
             </button>
-            <button
-              className="btn btn-ghost"
-              style={{ width: '100%' }}
-              disabled={!settings.github || pushStatus === 'pushing'}
-              onClick={handlePush}
-            >
-              {pushStatus === 'pushing'
-                ? 'Enviando…'
-                : pushStatus === 'success'
-                  ? '✓ Push OK'
-                  : pushStatus === 'error'
-                    ? '✗ Error al push'
-                    : settings.github
-                      ? `↑ Push · ${settings.github.owner}/${settings.github.repo}`
-                      : '↑ Push a GitHub'}
-            </button>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                className="btn btn-ghost"
+                style={{ flex: 1 }}
+                disabled={!settings.github || pushStatus === 'pushing'}
+                onClick={handlePush}
+              >
+                {pushStatus === 'pushing'
+                  ? 'Enviando…'
+                  : pushStatus === 'success'
+                    ? '✓ Push OK'
+                    : pushStatus === 'error'
+                      ? '✗ Error'
+                      : '↑ Push'}
+              </button>
+              <button
+                className="btn btn-ghost"
+                style={{ flex: 1 }}
+                disabled={!settings.github || pullStatus === 'pulling'}
+                onClick={() => void handlePull()}
+              >
+                {pullStatus === 'pulling'
+                  ? 'Bajando…'
+                  : pullStatus === 'success'
+                    ? '✓ Pull OK'
+                    : pullStatus === 'error'
+                      ? '✗ Error'
+                      : '↓ Pull'}
+              </button>
+            </div>
             {!settings.github && (
               <button
                 onClick={() => navigate('/settings')}

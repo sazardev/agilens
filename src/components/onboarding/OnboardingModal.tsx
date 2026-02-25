@@ -1347,11 +1347,10 @@ export default function OnboardingModal({ onClose }: Props) {
                               Tema
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
-                              {(['dark', 'light', 'system'] as UITheme[]).map(t => {
+                              {(['dark', 'light'] as UITheme[]).map(t => {
                                 const LABELS: Record<UITheme, string> = {
                                   dark: '🌙 Oscuro',
                                   light: '☀ Claro',
-                                  system: '⬡ Sistema',
                                 }
                                 const active = currTheme === t
                                 return (
