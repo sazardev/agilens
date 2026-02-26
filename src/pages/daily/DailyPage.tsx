@@ -2,7 +2,7 @@
  * DailyPage — Daily Standup builder.
  * Minimal, focused, elegant.
  */
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import type { JSX } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -267,6 +267,451 @@ const LINKABLE_NOTE_TYPES = [
   'technical',
   'sprint',
 ]
+
+type SortOption = 'updatedAt' | 'createdAt' | 'title' | 'type'
+
+// ─── Note Picker Modal ────────────────────────────────────────────────────────
+
+function NotePickerModal({
+  notes,
+  sprints,
+  linkedIds,
+  onToggle,
+  onClose,
+  onOpenNote,
+  initialTypeFilter = 'all',
+}: {
+  notes: Note[]
+  sprints: Sprint[]
+  linkedIds: string[]
+  onToggle: (id: string) => void
+  onClose: () => void
+  onOpenNote: (id: string) => void
+  initialTypeFilter?: string
+}) {
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState(initialTypeFilter)
+  const [sprintFilter, setSprintFilter] = useState('all')
+  const [tagFilter, setTagFilter] = useState('')
+  const [sort, setSort] = useState<SortOption>('updatedAt')
+  const [showLinked, setShowLinked] = useState<'all' | 'linked' | 'unlinked'>('all')
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    searchRef.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const linkableNotes = notes.filter(n => LINKABLE_NOTE_TYPES.includes(n.noteType))
+
+  const allTags = useMemo(() => {
+    const s = new Set<string>()
+    linkableNotes.forEach(n => n.tags.forEach(t => s.add(t)))
+    return [...s].sort()
+  }, [linkableNotes])
+
+  const filtered = useMemo(() => {
+    let r = linkableNotes
+    if (typeFilter !== 'all') r = r.filter(n => n.noteType === typeFilter)
+    if (sprintFilter === '__none__') r = r.filter(n => !n.sprintId)
+    else if (sprintFilter !== 'all') r = r.filter(n => n.sprintId === sprintFilter)
+    if (tagFilter) r = r.filter(n => n.tags.includes(tagFilter))
+    if (showLinked === 'linked') r = r.filter(n => linkedIds.includes(n.id))
+    else if (showLinked === 'unlinked') r = r.filter(n => !linkedIds.includes(n.id))
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      r = r.filter(
+        n =>
+          n.title.toLowerCase().includes(q) ||
+          n.tags.some(t => t.toLowerCase().includes(q)) ||
+          (n.content ?? '').toLowerCase().slice(0, 400).includes(q)
+      )
+    }
+    return [...r].sort((a, b) => {
+      if (sort === 'title') return a.title.localeCompare(b.title, 'es')
+      if (sort === 'type') return a.noteType.localeCompare(b.noteType)
+      if (sort === 'createdAt') return (b.createdAt ?? '').localeCompare(a.createdAt ?? '')
+      return (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
+    })
+  }, [linkableNotes, typeFilter, sprintFilter, tagFilter, showLinked, search, sort, linkedIds])
+
+  const linkedCount = linkedIds.length
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        background: 'rgba(0,0,0,0.62)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+      }}
+      onClick={e => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div
+        style={{
+          background: 'var(--bg-1)',
+          border: '1px solid var(--border-1)',
+          borderRadius: 'var(--radius-lg)',
+          width: '100%',
+          maxWidth: '720px',
+          maxHeight: '88vh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.45)',
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{ padding: '16px 16px 0', display: 'flex', flexDirection: 'column', gap: '10px' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <IcoLink />
+            <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-0)', flex: 1 }}>
+              Vincular notas al daily
+            </span>
+            {linkedCount > 0 && (
+              <span
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--accent-400)',
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 600,
+                }}
+              >
+                {linkedCount} vinculada{linkedCount !== 1 ? 's' : ''}
+              </span>
+            )}
+            <button
+              onClick={onClose}
+              title="Cerrar (Esc)"
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text-3)',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <input
+            ref={searchRef}
+            type="text"
+            placeholder="Buscar por título, etiqueta o contenido..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="input-base"
+            style={{ fontSize: '13px' }}
+          />
+        </div>
+
+        {/* Filters */}
+        <div
+          style={{
+            padding: '10px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            borderBottom: '1px solid var(--border-1)',
+          }}
+        >
+          {/* Tipo */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+            {LINKED_TYPE_FILTERS.map(f => {
+              const cnt =
+                f.value === 'all'
+                  ? linkableNotes.length
+                  : linkableNotes.filter(n => n.noteType === f.value).length
+              const active = typeFilter === f.value
+              return (
+                <button
+                  key={f.value}
+                  onClick={() => setTypeFilter(f.value)}
+                  style={{
+                    padding: '2px 9px',
+                    borderRadius: '99px',
+                    border: '1px solid',
+                    borderColor: active ? f.color : 'var(--border-2)',
+                    background: active ? f.color + '18' : 'transparent',
+                    color: active ? f.color : 'var(--text-2)',
+                    fontSize: '11px',
+                    fontWeight: active ? 600 : 400,
+                    cursor: 'pointer',
+                    transition: 'all 0.12s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  {f.label}
+                  <span style={{ opacity: 0.6, fontFamily: 'var(--font-mono)' }}>{cnt}</span>
+                </button>
+              )
+            })}
+          </div>
+          {/* Fila 2: sprint, etiqueta, orden, vinc filter */}
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <select
+              value={sprintFilter}
+              onChange={e => setSprintFilter(e.target.value)}
+              className="input-base"
+              style={{ fontSize: '11px', padding: '3px 8px', width: 'auto', height: 'auto' }}
+            >
+              <option value="all">Todos los sprints</option>
+              {sprints.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+              <option value="__none__">Sin sprint</option>
+            </select>
+            <select
+              value={tagFilter}
+              onChange={e => setTagFilter(e.target.value)}
+              className="input-base"
+              style={{ fontSize: '11px', padding: '3px 8px', width: 'auto', height: 'auto' }}
+            >
+              <option value="">Todas las etiquetas</option>
+              {allTags.map(t => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            <select
+              value={sort}
+              onChange={e => setSort(e.target.value as SortOption)}
+              className="input-base"
+              style={{ fontSize: '11px', padding: '3px 8px', width: 'auto', height: 'auto' }}
+            >
+              <option value="updatedAt">Más recientes</option>
+              <option value="createdAt">Más antiguas</option>
+              <option value="title">A → Z</option>
+              <option value="type">Por tipo</option>
+            </select>
+            <div style={{ display: 'flex', gap: '3px', marginLeft: 'auto' }}>
+              {(['all', 'linked', 'unlinked'] as const).map(v => (
+                <button
+                  key={v}
+                  onClick={() => setShowLinked(v)}
+                  style={{
+                    padding: '2px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-2)',
+                    background: showLinked === v ? 'var(--accent-glow)' : 'transparent',
+                    color: showLinked === v ? 'var(--accent-400)' : 'var(--text-3)',
+                    fontSize: '11px',
+                    cursor: 'pointer',
+                    fontWeight: showLinked === v ? 600 : 400,
+                  }}
+                >
+                  {v === 'all' ? 'Todas' : v === 'linked' ? 'Vinculadas' : 'Sin vincular'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Lista */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '6px 10px' }}>
+          {filtered.length === 0 && (
+            <div
+              style={{
+                padding: '32px',
+                textAlign: 'center' as const,
+                color: 'var(--text-3)',
+                fontSize: '13px',
+              }}
+            >
+              {linkableNotes.length === 0
+                ? 'Crea tareas, investigaciones o reuniones para vincularlas.'
+                : 'Sin resultados para los filtros actuales.'}
+            </div>
+          )}
+          {filtered.map(note => {
+            const meta = LINKED_TYPE_META[note.noteType] ?? LINKED_TYPE_META.note
+            const isLinked = linkedIds.includes(note.id)
+            const noteSprint = sprints.find(s => s.id === note.sprintId)
+            return (
+              <div
+                key={note.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '7px 10px',
+                  borderRadius: 'var(--radius-md)',
+                  background: isLinked ? 'var(--accent-glow)' : 'transparent',
+                  border: `1px solid ${isLinked ? 'var(--accent-600)' : 'transparent'}`,
+                  marginBottom: '2px',
+                  cursor: 'pointer',
+                  transition: 'all 0.12s',
+                }}
+                onClick={() => onToggle(note.id)}
+              >
+                <input
+                  type="checkbox"
+                  checked={isLinked}
+                  onChange={() => onToggle(note.id)}
+                  onClick={e => e.stopPropagation()}
+                  style={{ accentColor: meta.color, flexShrink: 0 }}
+                />
+                <span
+                  style={{
+                    padding: '1px 6px',
+                    borderRadius: '99px',
+                    background: meta.color + '20',
+                    color: meta.color,
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap' as const,
+                  }}
+                >
+                  {meta.label}
+                </span>
+                <span
+                  style={{
+                    fontSize: '13px',
+                    color: 'var(--text-0)',
+                    flex: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap' as const,
+                  }}
+                >
+                  {note.title}
+                </span>
+                {noteSprint && (
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      color: '#f472b6',
+                      fontFamily: 'var(--font-mono)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {noteSprint.name}
+                  </span>
+                )}
+                {note.tags.length > 0 && (
+                  <div style={{ display: 'flex', gap: '3px', flexShrink: 0 }}>
+                    {note.tags.slice(0, 3).map(t => (
+                      <span
+                        key={t}
+                        style={{
+                          fontSize: '10px',
+                          padding: '1px 5px',
+                          borderRadius: '99px',
+                          background: 'var(--bg-3)',
+                          color: 'var(--text-3)',
+                          cursor: 'pointer',
+                        }}
+                        onClick={e => {
+                          e.stopPropagation()
+                          setTagFilter(t)
+                        }}
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <span
+                  style={{
+                    fontSize: '10px',
+                    color: 'var(--text-3)',
+                    fontFamily: 'var(--font-mono)',
+                    flexShrink: 0,
+                  }}
+                >
+                  {note.updatedAt?.split('T')[0] ?? ''}
+                </span>
+                <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    onOpenNote(note.id)
+                  }}
+                  title="Abrir en editor"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-3)',
+                    padding: '2px 4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexShrink: 0,
+                    transition: 'color 0.12s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent-400)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-3)')}
+                >
+                  <svg
+                    width="12"
+                    height="12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
+                </button>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            padding: '12px 16px',
+            borderTop: '1px solid var(--border-1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <span style={{ fontSize: '12px', color: 'var(--text-3)' }}>
+            {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
+            {linkedCount > 0 && ` · ${linkedCount} vinculada${linkedCount !== 1 ? 's' : ''}`}
+          </span>
+          <button className="btn btn-primary" onClick={onClose}>
+            Listo
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ─── Item row ────────────────────────────────────────────────────────────────
 
@@ -613,9 +1058,8 @@ export default function DailyPage() {
   const [editSprintId, setEditSprintId] = useState<string | null>(null)
   const [editSprintGoal, setEditSprintGoal] = useState('')
   const [savedFlash, setSavedFlash] = useState(false)
-  const [showLinkedNotes, setShowLinkedNotes] = useState(false)
-  const [linkedNoteSearch, setLinkedNoteSearch] = useState('')
-  const [linkedNoteTypeFilter, setLinkedNoteTypeFilter] = useState<string>('all')
+  const [showNoteModal, setShowNoteModal] = useState(false)
+  const [noteModalInitialType, setNoteModalInitialType] = useState<string>('all')
   const [showProjects, setShowProjects] = useState(true)
   const [hiddenOptional, setHiddenOptional] = useState<Set<SectionKey>>(
     new Set(['highlights'] as SectionKey[])
@@ -641,6 +1085,7 @@ export default function DailyPage() {
     ? entry.projectIds
     : (prevEntryWithProjects?.projectIds ?? [])
 
+  // sprintNotes: broad set para auto-link (tasks, sprint notes y tags relacionados)
   const sprintNotes: Note[] = activeSprint
     ? notes.filter(
         n =>
@@ -653,7 +1098,13 @@ export default function DailyPage() {
           )
       )
     : []
-  const suggestions = sprintNotes.map(n => n.title).filter(t => t.length < 70)
+  // Sugerencias: SOLO tareas directamente asignadas al sprint activo
+  const suggestions = activeSprint
+    ? notes
+        .filter(n => n.noteType === 'task' && n.sprintId === activeSprint.id)
+        .map(n => n.title)
+        .filter(t => t.length < 70)
+    : []
   const usedItems = new Set<string>([
     ...(entry?.did ?? []),
     ...(entry?.will ?? []),
@@ -790,19 +1241,8 @@ export default function DailyPage() {
     setTimeout(() => navigate('/editor'), 120)
   }, [entry, notes, activeSprint, sprints, dispatch, navigate])
 
-  // Notas vinculables: task, research, meeting, evidence, note, technical, sprint
+  // Notas vinculables (usado en el modal)
   const linkableNotes = notes.filter(n => LINKABLE_NOTE_TYPES.includes(n.noteType))
-  const baseLinkedNotes =
-    linkedNoteTypeFilter === 'all'
-      ? linkableNotes
-      : linkableNotes.filter(n => n.noteType === linkedNoteTypeFilter)
-  const filteredLinkedNotes = linkedNoteSearch.trim()
-    ? baseLinkedNotes.filter(
-        n =>
-          n.title.toLowerCase().includes(linkedNoteSearch.toLowerCase()) ||
-          n.tags.some(t => t.toLowerCase().includes(linkedNoteSearch.toLowerCase()))
-      )
-    : baseLinkedNotes
 
   // Preview en tiempo real del markdown que se generará
   const previewMarkdown = buildMarkdown(
@@ -837,6 +1277,22 @@ export default function DailyPage() {
       ref={containerRef}
       style={{ height: '100%', display: 'flex', overflow: 'hidden', background: 'var(--bg-0)' }}
     >
+      {/* ─── Note Picker Modal ─── */}
+      {showNoteModal && (
+        <NotePickerModal
+          notes={notes}
+          sprints={sprints}
+          linkedIds={entry?.noteIds ?? []}
+          onToggle={toggleNote}
+          onClose={() => setShowNoteModal(false)}
+          onOpenNote={id => {
+            dispatch(setActiveNoteId(id))
+            navigate('/editor')
+          }}
+          initialTypeFilter={noteModalInitialType}
+        />
+      )}
+
       {/* ─── Form column ─── */}
       <div
         style={{
@@ -1201,6 +1657,53 @@ export default function DailyPage() {
                       {items.length}
                     </span>
                   )}
+                  {(section.key === 'did' || section.key === 'will') && (
+                    <button
+                      onClick={e => {
+                        e.stopPropagation()
+                        setNoteModalInitialType('task')
+                        setShowNoteModal(true)
+                      }}
+                      style={{
+                        fontSize: '11px',
+                        padding: '2px 8px',
+                        borderRadius: '99px',
+                        border: '1px solid var(--border-2)',
+                        background: 'transparent',
+                        color: 'var(--text-2)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        flexShrink: 0,
+                        transition: 'all 0.12s',
+                        whiteSpace: 'nowrap',
+                      }}
+                      onMouseEnter={e => {
+                        const el = e.currentTarget as HTMLElement
+                        el.style.borderColor = '#facc15'
+                        el.style.color = '#facc15'
+                      }}
+                      onMouseLeave={e => {
+                        const el = e.currentTarget as HTMLElement
+                        el.style.borderColor = 'var(--border-2)'
+                        el.style.color = 'var(--text-2)'
+                      }}
+                    >
+                      <svg
+                        width="11"
+                        height="11"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                      >
+                        <polyline points="9 11 12 14 22 4" />
+                        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+                      </svg>
+                      Vincular tarea
+                    </button>
+                  )}
                   {section.optional && (
                     <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-3)' }}>
                       {isHidden ? <IcoChevronDown /> : <IcoChevronUp />}
@@ -1235,7 +1738,24 @@ export default function DailyPage() {
                       <SuggestionChips
                         items={suggestions}
                         used={usedItems}
-                        onSelect={s => addItem(section.key, s)}
+                        onSelect={s => {
+                          // Añadir el texto al daily
+                          const e = getOrCreate()
+                          const currentItems = (e[section.key] as string[] | undefined) ?? []
+                          if (!currentItems.includes(s)) {
+                            dispatch(updateEntry({ id: e.id, [section.key]: [...currentItems, s] }))
+                          }
+                          // Auto-vincular la tarea que coincida con esta sugerencia
+                          const matchedNote = notes.find(
+                            n => n.noteType === 'task' && n.title === s
+                          )
+                          if (matchedNote && !e.noteIds.includes(matchedNote.id)) {
+                            dispatch(
+                              updateEntry({ id: e.id, noteIds: [...e.noteIds, matchedNote.id] })
+                            )
+                          }
+                          flashSave()
+                        }}
                       />
                     )}
 
@@ -1280,16 +1800,7 @@ export default function DailyPage() {
 
           {/* Notas vinculadas */}
           <div style={card}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                cursor: 'pointer',
-                userSelect: 'none',
-              }}
-              onClick={() => setShowLinkedNotes(v => !v)}
-            >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-2)' }}>
                 <IcoLink />
               </span>
@@ -1308,17 +1819,29 @@ export default function DailyPage() {
                   {entry!.noteIds.length}
                 </span>
               )}
-              <span style={{ fontSize: '10px', color: 'var(--text-3)', marginRight: '2px' }}>
-                tareas · investigación · reuniones · evidencias
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-3)' }}>
-                {showLinkedNotes ? <IcoChevronUp /> : <IcoChevronDown />}
-              </span>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowNoteModal(true)}
+                style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  viewBox="0 0 24 24"
+                >
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Vincular notas
+              </button>
             </div>
 
-            {/* Pills de notas ya vinculadas (siempre visibles si hay) */}
-            {(entry?.noteIds.length ?? 0) > 0 && !showLinkedNotes && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
+            {/* Pills de notas vinculadas con botón de desvincular */}
+            {(entry?.noteIds.length ?? 0) > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '10px' }}>
                 {entry!.noteIds.map(nid => {
                   const n = notes.find(x => x.id === nid)
                   if (!n) return null
@@ -1330,7 +1853,7 @@ export default function DailyPage() {
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: '4px',
-                        padding: '2px 7px',
+                        padding: '2px 6px 2px 8px',
                         borderRadius: '99px',
                         background: meta.color + '18',
                         border: `1px solid ${meta.color}33`,
@@ -1341,189 +1864,65 @@ export default function DailyPage() {
                     >
                       <span
                         style={{
-                          width: '6px',
-                          height: '6px',
+                          width: '5px',
+                          height: '5px',
                           borderRadius: '2px',
                           background: meta.color,
                           flexShrink: 0,
                         }}
                       />
-                      {n.title.length > 30 ? n.title.slice(0, 30) + '…' : n.title}
+                      <span
+                        style={{
+                          cursor: 'pointer',
+                          maxWidth: '140px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap' as const,
+                        }}
+                        onClick={() => {
+                          dispatch(setActiveNoteId(nid))
+                          navigate('/editor')
+                        }}
+                        title={n.title}
+                      >
+                        {n.title}
+                      </span>
+                      <button
+                        onClick={() => toggleNote(nid)}
+                        title="Desvincular"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: meta.color,
+                          opacity: 0.6,
+                          padding: '0 2px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          lineHeight: 1,
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                        onMouseLeave={e => (e.currentTarget.style.opacity = '0.6')}
+                      >
+                        ×
+                      </button>
                     </span>
                   )
                 })}
               </div>
             )}
 
-            {showLinkedNotes && (
-              <div
-                style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}
+            {(entry?.noteIds.length ?? 0) === 0 && (
+              <p
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--text-3)',
+                  margin: '8px 0 0',
+                  fontStyle: 'italic',
+                }}
               >
-                {/* Filtros por tipo */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                  {LINKED_TYPE_FILTERS.map(f => {
-                    const count =
-                      f.value === 'all'
-                        ? linkableNotes.length
-                        : linkableNotes.filter(n => n.noteType === f.value).length
-                    const active = linkedNoteTypeFilter === f.value
-                    return (
-                      <button
-                        key={f.value}
-                        onClick={() => setLinkedNoteTypeFilter(f.value)}
-                        style={{
-                          padding: '2px 9px',
-                          borderRadius: '99px',
-                          border: '1px solid',
-                          borderColor: active ? f.color : 'var(--border-2)',
-                          background: active ? f.color + '18' : 'transparent',
-                          color: active ? f.color : 'var(--text-2)',
-                          fontSize: '11px',
-                          fontWeight: active ? 600 : 400,
-                          cursor: 'pointer',
-                          transition: 'all 0.15s',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                        }}
-                      >
-                        {f.label}
-                        <span style={{ opacity: 0.65, fontFamily: 'var(--font-mono)' }}>
-                          {count}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {/* Búsqueda */}
-                <input
-                  type="text"
-                  placeholder="Buscar por título o etiqueta..."
-                  value={linkedNoteSearch}
-                  onChange={e => setLinkedNoteSearch(e.target.value)}
-                  className="input-base"
-                  style={{ fontSize: '12px' }}
-                />
-
-                {/* Lista */}
-                <div
-                  style={{
-                    maxHeight: '280px',
-                    overflowY: 'auto',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '3px',
-                  }}
-                >
-                  {filteredLinkedNotes.length === 0 && (
-                    <p style={{ fontSize: '12px', color: 'var(--text-3)', margin: 0 }}>
-                      {linkableNotes.length === 0
-                        ? 'Sin notas disponibles. Crea tareas, investigaciones o reuniones.'
-                        : 'Sin resultados.'}
-                    </p>
-                  )}
-                  {filteredLinkedNotes.map(note => {
-                    const meta = LINKED_TYPE_META[note.noteType] ?? LINKED_TYPE_META.note
-                    const isLinked = entry?.noteIds.includes(note.id) ?? false
-                    return (
-                      <div
-                        key={note.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '6px 10px',
-                          borderRadius: 'var(--radius-md)',
-                          background: isLinked ? 'var(--accent-glow)' : 'var(--bg-1)',
-                          border: `1px solid ${isLinked ? 'var(--accent-600)' : 'var(--border-1)'}`,
-                          transition: 'all 0.15s',
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isLinked}
-                          onChange={() => toggleNote(note.id)}
-                          style={{ accentColor: meta.color, flexShrink: 0 }}
-                        />
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            padding: '1px 6px',
-                            borderRadius: '99px',
-                            background: meta.color + '20',
-                            color: meta.color,
-                            fontSize: '10px',
-                            fontWeight: 600,
-                            flexShrink: 0,
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {meta.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: '12px',
-                            color: 'var(--text-0)',
-                            flex: 1,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {note.title}
-                        </span>
-                        {note.tags.length > 0 && (
-                          <span
-                            style={{
-                              fontSize: '10px',
-                              color: 'var(--text-3)',
-                              fontFamily: 'var(--font-mono)',
-                              flexShrink: 0,
-                            }}
-                          >
-                            {note.tags.slice(0, 2).join(', ')}
-                          </span>
-                        )}
-                        <button
-                          onClick={() => {
-                            dispatch(setActiveNoteId(note.id))
-                            navigate('/editor')
-                          }}
-                          title="Abrir nota en editor"
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: 'var(--text-3)',
-                            padding: '2px 4px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            flexShrink: 0,
-                            transition: 'color 0.15s',
-                          }}
-                          onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent-400)')}
-                          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-3)')}
-                        >
-                          <svg
-                            width="12"
-                            height="12"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-                            <polyline points="15 3 21 3 21 9" />
-                            <line x1="10" y1="14" x2="21" y2="3" />
-                          </svg>
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+                Sin notas vinculadas — tareas, investigaciones, reuniones, evidencias...
+              </p>
             )}
           </div>
 
