@@ -101,6 +101,21 @@ export const IconTypeTask = () => (
     <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
   </svg>
 )
+export const IconTypeResearch = () => (
+  <svg
+    width="13"
+    height="13"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    viewBox="0 0 24 24"
+  >
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    <line x1="11" y1="8" x2="11" y2="14" />
+    <line x1="8" y1="11" x2="14" y2="11" />
+  </svg>
+)
 
 /** Lookup map: NoteType → icon component */
 export const NOTE_TYPE_ICONS: Record<NoteType, () => JSX.Element> = {
@@ -111,6 +126,7 @@ export const NOTE_TYPE_ICONS: Record<NoteType, () => JSX.Element> = {
   meeting: IconTypeMeeting,
   sprint: IconTypeSprint,
   task: IconTypeTask,
+  research: IconTypeResearch,
 }
 
 /** Renders the correct SVG icon for any NoteType */
@@ -210,6 +226,21 @@ export function NoteTypeIcon({ type, size = 13 }: { type: NoteType; size?: numbe
       >
         <polyline points="9 11 12 14 22 4" />
         <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+      </svg>
+    ),
+    research: (
+      <svg
+        width={size}
+        height={size}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        viewBox="0 0 24 24"
+      >
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        <line x1="11" y1="8" x2="11" y2="14" />
+        <line x1="8" y1="11" x2="14" y2="11" />
       </svg>
     ),
   }

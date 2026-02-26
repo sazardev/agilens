@@ -16,7 +16,7 @@ import {
   setNoteProject,
   setNoteProjects,
 } from '@/store/slices/notesSlice'
-import type { NoteAttachment, NoteType } from '@/types'
+import type { Note, NoteAttachment, NoteType } from '@/types'
 import { NOTE_TYPE_META } from '@/types'
 import { NoteTypeIcon } from '@/lib/noteIcons'
 import { nanoid } from 'nanoid'
@@ -232,6 +232,7 @@ export default function EditorPage() {
   const [showMore, setShowMore] = useState(false)
   const [showBacklinks, setShowBacklinks] = useState(false)
   const [showMeta, setShowMeta] = useState(false)
+  const [showResearchTaskPicker, setShowResearchTaskPicker] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [copyHtmlDone, setCopyHtmlDone] = useState(false)
@@ -469,6 +470,17 @@ export default function EditorPage() {
   function handleSetFolder(folderId: string | null) {
     if (!note) return
     dispatch(setNoteFolder({ noteId: note.id, folderId }))
+  }
+
+  function handleSetLinkedTask(taskNote: Note) {
+    if (!note) return
+    dispatch(updateNote({ id: note.id, linkedTaskId: taskNote.id }))
+    setShowResearchTaskPicker(false)
+  }
+
+  function handleUnlinkTask() {
+    if (!note) return
+    dispatch(updateNote({ id: note.id, linkedTaskId: undefined }))
   }
 
   function handleToggleProject(projId: string) {
@@ -1785,6 +1797,108 @@ export default function EditorPage() {
                   </div>
                 </>
               )}
+
+              {/* ── Tarea vinculada (solo investigaciones) ── */}
+              {note.noteType === 'research' && (
+                <>
+                  <div style={{ height: '1px', background: 'var(--border-1)', margin: '0 12px' }} />
+                  <div style={{ padding: '10px 12px 10px' }}>
+                    <p
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '10px',
+                        color: 'var(--text-3)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.07em',
+                        margin: '0 0 6px',
+                      }}
+                    >
+                      Tarea vinculada
+                    </p>
+                    {note.linkedTaskId ? (
+                      (() => {
+                        const task = allNotes.find(n => n.id === note!.linkedTaskId)
+                        return (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span
+                              style={{
+                                flex: 1,
+                                fontSize: '12px',
+                                color: '#22d3ee',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                padding: '4px 8px',
+                                borderRadius: 'var(--radius-sm)',
+                                background: 'rgba(34,211,238,0.08)',
+                                border: '1px solid rgba(34,211,238,0.2)',
+                              }}
+                            >
+                              {task?.title ?? note.linkedTaskId}
+                            </span>
+                            <button
+                              onClick={() => navigate(`/editor/${note!.linkedTaskId}`)}
+                              title="Abrir tarea"
+                              style={{
+                                flexShrink: 0,
+                                width: '22px',
+                                height: '22px',
+                                borderRadius: 'var(--radius-sm)',
+                                border: '1px solid var(--border-1)',
+                                background: 'transparent',
+                                color: 'var(--text-2)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '13px',
+                              }}
+                            >
+                              ↗
+                            </button>
+                            <button
+                              onClick={handleUnlinkTask}
+                              title="Desvincular"
+                              style={{
+                                flexShrink: 0,
+                                width: '22px',
+                                height: '22px',
+                                borderRadius: 'var(--radius-sm)',
+                                border: '1px solid var(--border-1)',
+                                background: 'transparent',
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '15px',
+                                opacity: 0.7,
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )
+                      })()
+                    ) : (
+                      <button
+                        onClick={() => setShowResearchTaskPicker(true)}
+                        className="btn btn-ghost btn-sm"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          fontSize: '12px',
+                          width: '100%',
+                          justifyContent: 'flex-start',
+                        }}
+                      >
+                        🔗 Vincular tarea
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -2902,6 +3016,13 @@ export default function EditorPage() {
                   setShowNotePicker(false)
                   editorRef.current?.focus()
                 }}
+              />
+            )}
+            {showResearchTaskPicker && (
+              <NoteRelationPicker
+                excludeId={note.id}
+                onSelect={handleSetLinkedTask}
+                onClose={() => setShowResearchTaskPicker(false)}
               />
             )}
           </div>

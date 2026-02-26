@@ -70,6 +70,7 @@ const NOTE_TYPE_COLOR: Record<NoteType, string> = {
   meeting: '#fb923c',
   sprint: '#f472b6',
   task: '#facc15',
+  research: '#22d3ee',
 }
 
 const NOTE_TYPE_LABEL: Record<NoteType, string> = {
@@ -80,6 +81,7 @@ const NOTE_TYPE_LABEL: Record<NoteType, string> = {
   meeting: 'Reunión',
   sprint: 'Sprint nota',
   task: 'Tarea',
+  research: 'Investigación',
 }
 
 const SPRINT_COLOR = '#7c3aed'
@@ -153,6 +155,7 @@ interface BuildOptions {
   linkImpediment: boolean
   linkDependency: boolean
   linkProject: boolean
+  linkResearch: boolean
   prevNodes?: GNode[]
   canvasW: number
   canvasH: number
@@ -181,6 +184,7 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
     linkDaily,
     linkDependency,
     linkProject,
+    linkResearch,
     prevNodes,
     canvasW,
     canvasH,
@@ -512,6 +516,25 @@ function buildGraph(opts: BuildOptions): { nodes: GNode[]; edges: GEdge[] } {
           color: 'rgba(99,102,241,0.3)',
           width: 1,
           dashed: true,
+        })
+      }
+    }
+  }
+
+  // ── Edges: research → linked task ──
+  if (linkResearch) {
+    for (const n of notes) {
+      if (n.noteType !== 'research' || !n.linkedTaskId) continue
+      const src = `note:${n.id}`
+      const tgt = `note:${n.linkedTaskId}`
+      if (allNodeIds.has(src) && allNodeIds.has(tgt)) {
+        edges.push({
+          source: src,
+          target: tgt,
+          kind: 'research-task',
+          color: 'rgba(34,211,238,0.7)',
+          width: 2,
+          dashed: false,
         })
       }
     }
@@ -940,6 +963,8 @@ interface FilterPanelProps {
   setLinkDependency: (v: boolean) => void
   linkProject: boolean
   setLinkProject: (v: boolean) => void
+  linkResearch: boolean
+  setLinkResearch: (v: boolean) => void
   gravityMode: GravityMode
   setGravityMode: (v: GravityMode) => void
   sprints: Sprint[]
@@ -984,6 +1009,8 @@ function FilterPanel({
   setLinkDependency,
   linkProject,
   setLinkProject,
+  linkResearch,
+  setLinkResearch,
   gravityMode,
   setGravityMode,
   sprints,
@@ -1346,6 +1373,7 @@ function FilterPanel({
               { label: 'Imp. → Sprint', value: linkImpediment, set: setLinkImpediment },
               { label: 'Dependencias [[]]', value: linkDependency, set: setLinkDependency },
               { label: 'Nota → Proyecto', value: linkProject, set: setLinkProject },
+              { label: 'Invest. → Tarea', value: linkResearch, set: setLinkResearch },
             ].map(item => (
               <label
                 key={item.label}
@@ -1509,6 +1537,7 @@ function FilterPanel({
             { shape: 'circle', label: 'Daily Entry', color: '#38bdf8' },
             { shape: 'diamond', label: 'Impedimento', color: '#ef4444' },
             { shape: 'circle', label: 'Nota', color: '#94a3b8' },
+            { shape: 'circle', label: 'Investigación', color: '#22d3ee' },
             { shape: 'pentagon', label: 'Proyecto', color: '#6366f1' },
           ].map(item => (
             <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1566,6 +1595,7 @@ function FilterPanel({
               { color: 'rgba(99,102,241,0.7)', label: '→ Proyecto', dashed: false },
               { color: 'rgba(56,189,248,0.7)', label: 'Daily → Nota', dashed: true },
               { color: 'rgba(148,163,184,0.5)', label: 'Etiqueta compartida', dashed: true },
+              { color: 'rgba(34,211,238,0.7)', label: 'Invest. → Tarea', dashed: false },
             ].map(item => (
               <div
                 key={item.label}
@@ -2152,6 +2182,7 @@ export default function NotesMapPage() {
   const [linkImpediment, setLinkImpediment] = useState(true)
   const [linkDependency, setLinkDependency] = useState(true)
   const [linkProject, setLinkProject] = useState(true)
+  const [linkResearch, setLinkResearch] = useState(true)
 
   // ── Physics state ──
   const [physics, setPhysics] = useState<PhysicsParams>({ ...DEFAULT_PHYSICS })
@@ -2217,6 +2248,7 @@ export default function NotesMapPage() {
       linkImpediment,
       linkDependency,
       linkProject,
+      linkResearch,
       prevNodes: nodesRef.current,
       canvasW: w,
       canvasH: h,
@@ -2248,6 +2280,7 @@ export default function NotesMapPage() {
     linkImpediment,
     linkDependency,
     linkProject,
+    linkResearch,
   ])
 
   // ── Animation loop ──
@@ -2670,6 +2703,8 @@ export default function NotesMapPage() {
         setLinkDependency={setLinkDependency}
         linkProject={linkProject}
         setLinkProject={setLinkProject}
+        linkResearch={linkResearch}
+        setLinkResearch={setLinkResearch}
         gravityMode={gravityMode}
         setGravityMode={setGravityMode}
         sprints={sprints}

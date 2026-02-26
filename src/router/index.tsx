@@ -16,6 +16,7 @@ const SprintsPage = lazy(() => import('@/pages/sprints/SprintsPage'))
 const KanbanPage = lazy(() => import('@/pages/kanban/KanbanPage'))
 const ProjectsPage = lazy(() => import('@/pages/projects/ProjectsPage'))
 const TaskPage = lazy(() => import('@/pages/tasks/TaskPage'))
+const ResearchPage = lazy(() => import('@/pages/research/ResearchPage'))
 
 // Minimal spinner shown while a page chunk is downloading
 function PageLoader() {
@@ -146,6 +147,14 @@ export const router = createBrowserRouter([
         element: (
           <S>
             <TaskPage />
+          </S>
+        ),
+      },
+      {
+        path: 'research',
+        element: (
+          <S>
+            <ResearchPage />
           </S>
         ),
       },

@@ -24,6 +24,7 @@ const TYPE_ORDER: NoteType[] = [
   'meeting',
   'sprint',
   'task',
+  'research',
 ]
 
 interface Props {

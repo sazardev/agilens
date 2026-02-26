@@ -1,6 +1,14 @@
 // ─── Notes ────────────────────────────────────────────────────────────────────
 
-export type NoteType = 'note' | 'daily' | 'evidence' | 'technical' | 'meeting' | 'sprint' | 'task'
+export type NoteType =
+  | 'note'
+  | 'daily'
+  | 'evidence'
+  | 'technical'
+  | 'meeting'
+  | 'sprint'
+  | 'task'
+  | 'research'
 
 export const NOTE_TYPE_META: Record<NoteType, { label: string; icon: string; color: string }> = {
   note: { label: 'Nota', icon: '📝', color: '#6b7280' },
@@ -10,6 +18,7 @@ export const NOTE_TYPE_META: Record<NoteType, { label: string; icon: string; col
   meeting: { label: 'Reunión', icon: '👥', color: '#fb923c' },
   sprint: { label: 'Sprint', icon: '🏃', color: '#f472b6' },
   task: { label: 'Tarea', icon: '✅', color: '#facc15' },
+  research: { label: 'Investigación', icon: '🔬', color: '#22d3ee' },
 }
 
 export interface NoteTemplate {
@@ -69,6 +78,7 @@ export interface Note {
   storyPoints?: number // story points de la tarea
   projectId?: string // proyecto al que pertenece esta nota (legacy — preferir projectIds)
   projectIds?: string[] // proyectos vinculados a esta nota (multi-proyecto)
+  linkedTaskId?: string // para notas de investigación: tarea vinculada
 }
 
 // ─── Folders ──────────────────────────────────────────────────────────────────

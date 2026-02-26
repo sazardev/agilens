@@ -115,6 +115,7 @@ const ALL_TYPES: NoteType[] = [
   'meeting',
   'sprint',
   'task',
+  'research',
 ]
 
 // ─── Dropdown helpers ─────────────────────────────────────────────────────────
