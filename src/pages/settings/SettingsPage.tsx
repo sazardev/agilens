@@ -1,6 +1,7 @@
 import { useAppDispatch, useAppSelector } from '@/store'
 import { updateSettings } from '@/store/slices/settingsSlice'
 import { useState, useRef } from 'react'
+import { useMobile } from '@/hooks/useMobile'
 import type { AccentColor, EditorFont, UIDensity, UITheme, MarkdownPreviewFont } from '@/types'
 import AgilensLogo from '@/components/layout/AgilensLogo'
 import OnboardingModal from '@/components/onboarding/OnboardingModal'
@@ -168,6 +169,7 @@ export default function SettingsPage() {
   const set = (patch: Parameters<typeof updateSettings>[0]) => dispatch(updateSettings(patch))
 
   const lh = s.lineHeight ?? 1.7
+  const isMobile = useMobile()
 
   return (
     <>
@@ -176,7 +178,7 @@ export default function SettingsPage() {
           style={{
             maxWidth: '640px',
             margin: '0 auto',
-            padding: '28px 24px 60px',
+            padding: isMobile ? '16px 16px 80px' : '28px 24px 60px',
             display: 'flex',
             flexDirection: 'column' as const,
             gap: '32px',

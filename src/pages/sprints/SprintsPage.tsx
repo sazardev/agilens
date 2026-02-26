@@ -6,6 +6,7 @@
 import { useState, useMemo } from 'react'
 import { nanoid } from '@reduxjs/toolkit'
 import { useNavigate } from 'react-router-dom'
+import { useMobile } from '@/hooks/useMobile'
 import { useAppDispatch, useAppSelector } from '@/store'
 import { addSprint, updateSprint, deleteSprint, setActiveSprint } from '@/store/slices/dailySlice'
 import { updateNote } from '@/store/slices/notesSlice'
@@ -229,6 +230,8 @@ function SprintModal({
   const [form, setForm] = useState<SprintForm>(editing ? sprintToForm(editing) : EMPTY_FORM)
   const [error, setError] = useState('')
 
+  const isMobile = useMobile()
+
   function set<K extends keyof SprintForm>(k: K, v: SprintForm[K]) {
     setForm(p => ({ ...p, [k]: v }))
   }
@@ -338,7 +341,13 @@ function SprintModal({
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+              gap: '12px',
+            }}
+          >
             <div>
               <label style={label}>Inicio</label>
               <input
@@ -359,7 +368,13 @@ function SprintModal({
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+              gap: '12px',
+            }}
+          >
             <div>
               <label style={label}>Estado</label>
               <select
@@ -2432,6 +2447,7 @@ export default function SprintsPage() {
   const [showRetro, setShowRetro] = useState(false)
   const [filterStatus, setFilterStatus] = useState<SprintStatus | 'all'>('all')
   const [showSideStats, setShowSideStats] = useState(false)
+  const isMobile = useMobile()
 
   const sortedSprints = useMemo(() => {
     const arr = [...sprints]
@@ -2548,10 +2564,10 @@ export default function SprintsPage() {
       {/* ── LEFT PANEL: Sprint list ── */}
       <div
         style={{
-          width: '260px',
+          width: isMobile ? '100%' : '260px',
           flexShrink: 0,
-          borderRight: '1px solid var(--border-1)',
-          display: 'flex',
+          borderRight: isMobile ? 'none' : '1px solid var(--border-1)',
+          display: isMobile && !!selectedId ? 'none' : 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
         }}
@@ -2726,59 +2742,88 @@ export default function SprintsPage() {
       </div>
 
       {/* ── RIGHT PANEL: Sprint detail ── */}
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {selected ? (
-          <SprintDetail
-            sprint={selected}
-            allNotes={allNotes}
-            allImpediments={allImpediments}
-            allEntries={allEntries}
-            isActive={selected.id === activeSprintId}
-            onEdit={() => {
-              setEditingSprint(selected)
-              setShowCreate(true)
-            }}
-            onDelete={handleDelete}
-            onSetActive={() => dispatch(setActiveSprint(selected.id))}
-            onRetro={() => setShowRetro(true)}
-          />
-        ) : (
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '12px',
-              color: 'var(--text-3)',
-            }}
-          >
-            <svg
-              width="40"
-              height="40"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.3"
-              viewBox="0 0 24 24"
-              style={{ opacity: 0.3 }}
-            >
-              <polyline points="13 17 18 12 13 7" />
-              <polyline points="6 17 11 12 6 7" />
-            </svg>
-            <span style={{ fontSize: '13px' }}>Selecciona un sprint para ver su detalle</span>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => {
-                setEditingSprint(undefined)
-                setShowCreate(true)
+      {(!isMobile || !!selectedId) && (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {isMobile && selectedId && (
+            <div
+              style={{
+                padding: '8px 12px',
+                borderBottom: '1px solid var(--border-1)',
+                flexShrink: 0,
               }}
             >
-              <IcoPlus /> Crear sprint
-            </button>
-          </div>
-        )}
-      </div>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setSelectedId(null)}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+                Volver
+              </button>
+            </div>
+          )}
+          {selected ? (
+            <SprintDetail
+              sprint={selected}
+              allNotes={allNotes}
+              allImpediments={allImpediments}
+              allEntries={allEntries}
+              isActive={selected.id === activeSprintId}
+              onEdit={() => {
+                setEditingSprint(selected)
+                setShowCreate(true)
+              }}
+              onDelete={handleDelete}
+              onSetActive={() => dispatch(setActiveSprint(selected.id))}
+              onRetro={() => setShowRetro(true)}
+            />
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '12px',
+                color: 'var(--text-3)',
+              }}
+            >
+              <svg
+                width="40"
+                height="40"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                viewBox="0 0 24 24"
+                style={{ opacity: 0.3 }}
+              >
+                <polyline points="13 17 18 12 13 7" />
+                <polyline points="6 17 11 12 6 7" />
+              </svg>
+              <span style={{ fontSize: '13px' }}>Selecciona un sprint para ver su detalle</span>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setEditingSprint(undefined)
+                  setShowCreate(true)
+                }}
+              >
+                <IcoPlus /> Crear sprint
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modals */}
       {showCreate && (

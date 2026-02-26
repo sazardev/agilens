@@ -38,6 +38,7 @@ import { markdownToHtml } from '@/lib/markdown/processor'
 import { saveAttachmentBlob } from '@/lib/attachmentsDb'
 import { writeAttachmentFile } from '@/lib/git/client'
 import { GIT_DIR, gitAutoCommit } from '@/store/slices/gitSlice'
+import { useMobile } from '@/hooks/useMobile'
 
 const modeLabels = { edit: 'Editor', split: 'Split', preview: 'Preview' } as const
 
@@ -869,7 +870,9 @@ export default function EditorPage() {
   }
 
   // When locked, always show preview-only (no editor)
-  const effectiveMode = note.locked ? 'preview' : mode
+  // On mobile: never allow split mode (too cramped)
+  const isMobile = useMobile()
+  const effectiveMode = note.locked ? 'preview' : isMobile && mode === 'split' ? 'edit' : mode
   const showFmtBar = effectiveMode !== 'preview'
 
   const editorContent = (
@@ -888,12 +891,13 @@ export default function EditorPage() {
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
-          padding: '0 12px',
+          gap: isMobile ? '4px' : '8px',
+          padding: isMobile ? '0 8px' : '0 12px',
           height: 'var(--toolbar-h)',
           borderBottom: showFmtBar ? 'none' : '1px solid var(--border-1)',
           background: 'var(--bg-1)',
           flexShrink: 0,
+          overflowX: isMobile ? 'auto' : 'visible',
         }}
       >
         {/* Tags editor */}
@@ -2475,41 +2479,44 @@ export default function EditorPage() {
             border: '1px solid var(--border-1)',
           }}
         >
-          {(['edit', 'split', 'preview'] as const).map(m => (
-            <button
-              key={m}
-              onClick={() => dispatch(setEditorPreviewMode(m))}
-              style={{
-                padding: '3px 8px',
-                borderRadius: 'var(--radius-sm)',
-                border: 'none',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-ui)',
-                fontSize: '11px',
-                fontWeight: mode === m ? 600 : 400,
-                transition: 'all var(--transition-fast)',
-                background: mode === m ? 'var(--accent-600)' : 'transparent',
-                color: mode === m ? '#fff' : 'var(--text-3)',
-                opacity: mode === m ? 1 : 0.6,
-              }}
-              onMouseEnter={e => {
-                const el = e.currentTarget as HTMLElement
-                if (mode !== m) {
-                  el.style.opacity = '1'
-                  el.style.color = 'var(--text-1)'
-                }
-              }}
-              onMouseLeave={e => {
-                const el = e.currentTarget as HTMLElement
-                if (mode !== m) {
-                  el.style.opacity = '0.6'
-                  el.style.color = 'var(--text-3)'
-                }
-              }}
-            >
-              {modeLabels[m]}
-            </button>
-          ))}
+          {(['edit', 'split', 'preview'] as const).map(m =>
+            // Hide 'split' button on mobile
+            isMobile && m === 'split' ? null : (
+              <button
+                key={m}
+                onClick={() => dispatch(setEditorPreviewMode(m))}
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: '11px',
+                  fontWeight: mode === m ? 600 : 400,
+                  transition: 'all var(--transition-fast)',
+                  background: mode === m ? 'var(--accent-600)' : 'transparent',
+                  color: mode === m ? '#fff' : 'var(--text-3)',
+                  opacity: mode === m ? 1 : 0.6,
+                }}
+                onMouseEnter={e => {
+                  const el = e.currentTarget as HTMLElement
+                  if (mode !== m) {
+                    el.style.opacity = '1'
+                    el.style.color = 'var(--text-1)'
+                  }
+                }}
+                onMouseLeave={e => {
+                  const el = e.currentTarget as HTMLElement
+                  if (mode !== m) {
+                    el.style.opacity = '0.6'
+                    el.style.color = 'var(--text-3)'
+                  }
+                }}
+              >
+                {modeLabels[m]}
+              </button>
+            )
+          )}
         </div>
       </div>
 

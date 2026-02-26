@@ -11,6 +11,7 @@
 import { useAppSelector, useAppDispatch } from '@/store'
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useMobile } from '@/hooks/useMobile'
 import {
   gitInit,
   gitSyncStatus,
@@ -473,6 +474,7 @@ export default function GitPage() {
   const [diffLoading, setDiffLoading] = useState(false)
   const [activeFileIdx, setActiveFileIdx] = useState(0)
   const navigate = useNavigate()
+  const isMobile = useMobile()
 
   // Sync note files to LightningFS then refresh git status whenever
   // the note list changes or we navigate to this page
@@ -930,16 +932,24 @@ export default function GitPage() {
       </div>
 
       {/* 3-panel body */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          overflow: isMobile ? 'auto' : 'hidden',
+        }}
+      >
         {/* Panel 1: Status + Actions */}
         <div
           style={{
-            width: '240px',
+            width: isMobile ? '100%' : '240px',
             flexShrink: 0,
-            borderRight: '1px solid var(--border-1)',
+            borderRight: isMobile ? 'none' : '1px solid var(--border-1)',
+            borderBottom: isMobile ? '1px solid var(--border-1)' : 'none',
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'hidden',
+            overflow: isMobile ? 'visible' : 'hidden',
           }}
         >
           {/* Branch */}
@@ -1244,6 +1254,7 @@ export default function GitPage() {
             minWidth: 0,
             overflowY: 'auto',
             borderRight: selectedOid ? '1px solid var(--border-1)' : 'none',
+            maxHeight: isMobile ? '240px' : undefined,
           }}
         >
           <div

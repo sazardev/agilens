@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm'
 import { useNavigate, useParams } from 'react-router-dom'
 import { nanoid } from '@reduxjs/toolkit'
 import { useAppDispatch, useAppSelector } from '@/store'
+import { useMobile } from '@/hooks/useMobile'
 import {
   addEntry,
   updateEntry,
@@ -508,6 +509,8 @@ export default function DailyPage() {
     mono: 'var(--font-mono)',
   }
 
+  const isMobile = useMobile()
+
   // ─── Resizable split ────────────────────────────────────────────────────────
   const SPLIT_KEY = 'agilens_daily_split'
   const [splitPct, setSplitPct] = useState<number>(() => {
@@ -878,7 +881,7 @@ export default function DailyPage() {
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                 <circle cx="12" cy="12" r="3" />
               </svg>
-              Vista previa
+              {!isMobile && 'Vista previa'}
             </button>
             <button
               className="btn btn-ghost btn-sm"
@@ -902,7 +905,7 @@ export default function DailyPage() {
                 <line x1="8" y1="14" x2="16" y2="14" />
                 <line x1="8" y1="18" x2="13" y2="18" />
               </svg>
-              Historial
+              {!isMobile && 'Historial'}
             </button>
           </div>
 

@@ -13,6 +13,7 @@ import {
 } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppSelector } from '@/store'
+import { useMobile } from '@/hooks/useMobile'
 import type { Note, Sprint, DailyEntry, Impediment, NoteType, Project } from '@/types'
 
 // ─── Node / Edge types ────────────────────────────────────────────────────────
@@ -1019,7 +1020,8 @@ function FilterPanel({
   nodeCount,
   edgeCount,
 }: FilterPanelProps) {
-  const [collapsed, setCollapsed] = useState(false)
+  const isMobile = useMobile()
+  const [collapsed, setCollapsed] = useState(isMobile)
 
   function toggleNoteType(t: NoteType) {
     const s = new Set(showNoteTypes)

@@ -5,6 +5,7 @@
 import { useState, useMemo } from 'react'
 import { nanoid } from '@reduxjs/toolkit'
 import { useNavigate } from 'react-router-dom'
+import { useMobile } from '@/hooks/useMobile'
 import { useAppDispatch, useAppSelector } from '@/store'
 import {
   addImpediment,
@@ -237,6 +238,7 @@ interface ModalProps {
 function ImpedimentModal({ editing, sprints, onSave, onClose }: ModalProps) {
   const [form, setForm] = useState<FormValues>(editing ? impedimentToForm(editing) : EMPTY_FORM)
   const [error, setError] = useState('')
+  const isMobile = useMobile()
 
   function set<K extends keyof FormValues>(k: K, v: FormValues[K]) {
     setForm(prev => ({ ...prev, [k]: v }))
@@ -373,7 +375,13 @@ function ImpedimentModal({ editing, sprints, onSave, onClose }: ModalProps) {
           </div>
 
           {/* Status + Severity */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+              gap: '12px',
+            }}
+          >
             <div>
               <label style={labelStyle}>Estado</label>
               <select
@@ -405,7 +413,13 @@ function ImpedimentModal({ editing, sprints, onSave, onClose }: ModalProps) {
           </div>
 
           {/* Sprint + Responsible */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+              gap: '12px',
+            }}
+          >
             <div>
               <label style={labelStyle}>Sprint</label>
               <select
@@ -433,7 +447,13 @@ function ImpedimentModal({ editing, sprints, onSave, onClose }: ModalProps) {
           </div>
 
           {/* Dates */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+              gap: '12px',
+            }}
+          >
             <div>
               <label style={labelStyle}>Fecha de apertura</label>
               <input

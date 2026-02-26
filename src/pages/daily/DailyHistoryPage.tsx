@@ -5,6 +5,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppSelector } from '@/store'
+import { useMobile } from '@/hooks/useMobile'
 import type { DailyEntry, Sprint } from '@/types'
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -499,7 +500,7 @@ function MonthStats({
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
         gap: '8px',
       }}
     >
@@ -552,6 +553,7 @@ export default function DailyHistoryPage() {
   const [viewMonth, setViewMonth] = useState(todayMonth)
   const [selectedISO, setSelectedISO] = useState<string>(today)
   const [filterSprintId, setFilterSprintId] = useState<string | 'all'>('all')
+  const isMobile = useMobile()
 
   function prevMonth() {
     if (viewMonth === 0) {
@@ -709,7 +711,7 @@ export default function DailyHistoryPage() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr minmax(240px, 280px)',
+            gridTemplateColumns: isMobile ? '1fr' : '1fr minmax(240px, 280px)',
             gap: '16px',
             alignItems: 'start',
           }}

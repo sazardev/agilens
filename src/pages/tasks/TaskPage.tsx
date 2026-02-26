@@ -19,6 +19,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { nanoid } from '@reduxjs/toolkit'
 import { useAppDispatch, useAppSelector } from '@/store'
+import { useMobile } from '@/hooks/useMobile'
 import { addNote } from '@/store/slices/notesSlice'
 import { setActiveNoteId } from '@/store/slices/uiSlice'
 import type { Note, KanbanStatus, TaskPriority } from '@/types'
@@ -800,6 +801,9 @@ export default function TaskPage() {
   const [form, setForm] = useState<TaskFormState>(DEFAULT_FORM)
   const [tags, setTags] = useState<string[]>([])
   const [showPreview, setShowPreview] = useState(() => window.innerWidth >= 1080)
+  const isMobile = useMobile()
+  // On mobile never show the preview split
+  const effectiveShowPreview = showPreview && !isMobile
   const [showGherkinImport, setShowGherkinImport] = useState(false)
   const [showDepPicker, setShowDepPicker] = useState(false)
   const [showGherkin, setShowGherkin] = useState(true)
@@ -889,7 +893,7 @@ export default function TaskPage() {
       {/* Form column */}
       <div
         style={{
-          flex: showPreview ? `0 0 ${splitPct}%` : '1 1 auto',
+          flex: effectiveShowPreview ? `0 0 ${splitPct}%` : '1 1 auto',
           overflowY: 'auto',
           minWidth: 0,
         }}
@@ -958,7 +962,7 @@ export default function TaskPage() {
               }}
             >
               <IcoPreview />
-              Vista previa
+              {!isMobile && 'Vista previa'}
             </button>
 
             <button
@@ -1589,7 +1593,7 @@ export default function TaskPage() {
       </div>
 
       {/* Resize handle (mismo que DailyPage) */}
-      {showPreview && (
+      {effectiveShowPreview && (
         <div
           className="daily-resize-handle"
           onPointerDown={handleDragStart}
@@ -1598,7 +1602,7 @@ export default function TaskPage() {
       )}
 
       {/* Preview column */}
-      {showPreview && (
+      {effectiveShowPreview && (
         <div
           style={{
             flex: 1,

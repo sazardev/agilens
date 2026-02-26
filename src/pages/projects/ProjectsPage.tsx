@@ -9,6 +9,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '@/store'
+import { useMobile } from '@/hooks/useMobile'
 import {
   addProject,
   updateProject,
@@ -1767,6 +1768,7 @@ export default function ProjectsPage() {
   const [editTarget, setEditTarget] = useState<Project | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const isMobile = useMobile()
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
@@ -1876,12 +1878,12 @@ export default function ProjectsPage() {
       {/* ── Left panel — project list ──────────────────────────────────── */}
       <div
         style={{
-          width: '280px',
-          minWidth: '220px',
+          width: isMobile ? '100%' : '280px',
+          minWidth: isMobile ? 0 : '220px',
           flexShrink: 0,
-          display: 'flex',
+          display: isMobile && selectedId !== null ? 'none' : 'flex',
           flexDirection: 'column',
-          borderRight: '1px solid var(--border-0, rgba(255,255,255,0.07))',
+          borderRight: isMobile ? 'none' : '1px solid var(--border-0, rgba(255,255,255,0.07))',
           background: 'var(--bg-05, rgba(255,255,255,0.015))',
         }}
       >
@@ -2113,147 +2115,173 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {/* ── Right panel — project detail ───────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {resolvedSelected ? (
-          <>
-            {/* Toolbar */}
+      {(!isMobile || selectedId !== null) && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {isMobile && selectedId !== null && (
             <div
               style={{
-                padding: '10px 20px',
+                padding: '8px 12px',
                 borderBottom: '1px solid var(--border-0, rgba(255,255,255,0.07))',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                gap: '8px',
                 flexShrink: 0,
               }}
             >
-              {resolvedSelected.archived ? (
-                <button
-                  onClick={() => dispatch(unarchiveProject(resolvedSelected.id))}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: '7px',
-                    border: '1px solid var(--border-0, rgba(255,255,255,0.1))',
-                    background: 'transparent',
-                    color: 'var(--text-1, #d1d5db)',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                  }}
-                >
-                  <IcoArchive /> Restaurar
-                </button>
-              ) : (
-                <button
-                  onClick={() => dispatch(archiveProject(resolvedSelected.id))}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: '7px',
-                    border: '1px solid var(--border-0, rgba(255,255,255,0.1))',
-                    background: 'transparent',
-                    color: 'var(--text-1, #d1d5db)',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                  }}
-                >
-                  <IcoArchive /> Archivar
-                </button>
-              )}
               <button
-                onClick={() => setConfirmDeleteId(resolvedSelected.id)}
-                style={{
-                  padding: '5px 12px',
-                  borderRadius: '7px',
-                  border: '1px solid rgba(239,68,68,0.3)',
-                  background: 'transparent',
-                  color: '#f87171',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                }}
+                className="btn btn-ghost btn-sm"
+                onClick={() => setSelectedId(null)}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
               >
-                <IcoTrash /> Eliminar
+                <svg
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+                Volver
               </button>
             </div>
-
-            <ProjectDetail
-              project={resolvedSelected}
-              onEdit={() => openEdit(resolvedSelected)}
-              token={token}
-            />
-          </>
-        ) : (
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '16px',
-              color: 'var(--text-3, #6b7280)',
-            }}
-          >
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              opacity={0.4}
-            >
-              <polygon points="12 2 2 7 12 12 22 7 12 2" />
-              <polyline points="2 17 12 22 22 17" />
-              <polyline points="2 12 12 17 22 12" />
-            </svg>
-            <div style={{ textAlign: 'center' }}>
+          )}
+          {resolvedSelected ? (
+            <>
+              {/* Toolbar */}
               <div
                 style={{
-                  fontSize: '15px',
-                  fontWeight: 600,
-                  color: 'var(--text-1, #d1d5db)',
-                  marginBottom: '6px',
+                  padding: '10px 20px',
+                  borderBottom: '1px solid var(--border-0, rgba(255,255,255,0.07))',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: '8px',
+                  flexShrink: 0,
                 }}
               >
-                Sin proyectos
+                {resolvedSelected.archived ? (
+                  <button
+                    onClick={() => dispatch(unarchiveProject(resolvedSelected.id))}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '7px',
+                      border: '1px solid var(--border-0, rgba(255,255,255,0.1))',
+                      background: 'transparent',
+                      color: 'var(--text-1, #d1d5db)',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                    }}
+                  >
+                    <IcoArchive /> Restaurar
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => dispatch(archiveProject(resolvedSelected.id))}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '7px',
+                      border: '1px solid var(--border-0, rgba(255,255,255,0.1))',
+                      background: 'transparent',
+                      color: 'var(--text-1, #d1d5db)',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                    }}
+                  >
+                    <IcoArchive /> Archivar
+                  </button>
+                )}
+                <button
+                  onClick={() => setConfirmDeleteId(resolvedSelected.id)}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: '7px',
+                    border: '1px solid rgba(239,68,68,0.3)',
+                    background: 'transparent',
+                    color: '#f87171',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                  }}
+                >
+                  <IcoTrash /> Eliminar
+                </button>
               </div>
-              <div style={{ fontSize: '13px' }}>
-                Crea un proyecto o importa repositorios de GitHub
-              </div>
-            </div>
-            <button
-              onClick={openNew}
+
+              <ProjectDetail
+                project={resolvedSelected}
+                onEdit={() => openEdit(resolvedSelected)}
+                token={token}
+              />
+            </>
+          ) : (
+            <div
               style={{
-                padding: '8px 20px',
-                borderRadius: '9px',
-                border: 'none',
-                background: 'var(--accent-500, #6366f1)',
-                color: 'white',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: 600,
+                flex: 1,
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
-                gap: '6px',
+                justifyContent: 'center',
+                gap: '16px',
+                color: 'var(--text-3, #6b7280)',
               }}
             >
-              <IcoPlus /> Nuevo proyecto
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ── Modals ──────────────────────────────────────────────────────── */}
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                opacity={0.4}
+              >
+                <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                <polyline points="2 17 12 22 22 17" />
+                <polyline points="2 12 12 17 22 12" />
+              </svg>
+              <div style={{ textAlign: 'center' }}>
+                <div
+                  style={{
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    color: 'var(--text-1, #d1d5db)',
+                    marginBottom: '6px',
+                  }}
+                >
+                  Sin proyectos
+                </div>
+                <div style={{ fontSize: '13px' }}>
+                  Crea un proyecto o importa repositorios de GitHub
+                </div>
+              </div>
+              <button
+                onClick={openNew}
+                style={{
+                  padding: '8px 20px',
+                  borderRadius: '9px',
+                  border: 'none',
+                  background: 'var(--accent-500, #6366f1)',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <IcoPlus /> Nuevo proyecto
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {formOpen && (
         <ProjectFormModal

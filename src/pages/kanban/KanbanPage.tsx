@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { nanoid } from 'nanoid'
 import { useAppSelector, useAppDispatch } from '@/store'
+import { useMobile } from '@/hooks/useMobile'
 import {
   addNote,
   setKanbanStatus,
@@ -746,6 +747,7 @@ function KanbanColumn({
   onAssignSprint,
   onCardClick,
   onAddTask,
+  isMobile = false,
 }: {
   status: KanbanStatus
   notes: Note[]
@@ -755,6 +757,7 @@ function KanbanColumn({
   onAssignSprint: (noteId: string, sprintId: string | null) => void
   onCardClick: (note: Note) => void
   onAddTask: (title: string, status: KanbanStatus) => void
+  isMobile?: boolean
 }) {
   const meta = KANBAN_STATUS_META[status]
   const [dragTarget, setDragTarget] = useState(false)
@@ -788,9 +791,10 @@ function KanbanColumn({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        minWidth: '240px',
-        maxWidth: '280px',
-        flex: '1 0 240px',
+        minWidth: isMobile ? 'min(85vw, 320px)' : '240px',
+        maxWidth: isMobile ? 'min(85vw, 320px)' : '280px',
+        flex: isMobile ? `0 0 min(85vw, 320px)` : '1 0 240px',
+        scrollSnapAlign: isMobile ? 'start' : undefined,
         background: dragTarget ? 'rgba(99,102,241,0.04)' : 'var(--bg-0)',
         border: `2px solid ${dragTarget ? 'var(--accent-500)' : 'var(--border-1)'}`,
         borderRadius: 'var(--radius-lg)',
@@ -952,6 +956,7 @@ type SortKey = 'updated' | 'created' | 'title' | 'priority'
 export default function KanbanPage() {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
+  const isMobile = useMobile()
 
   const allNotes = useAppSelector(s => s.notes.notes)
   const sprints = useAppSelector(s => s.daily.sprints)
@@ -1437,15 +1442,19 @@ export default function KanbanPage() {
 
       {/* ── Board ────────────────────────────────────────────────────────── */}
       <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          gap: '10px',
-          padding: '14px 16px 16px',
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          alignItems: 'stretch',
-        }}
+        style={
+          {
+            flex: 1,
+            display: 'flex',
+            gap: '10px',
+            padding: isMobile ? '10px 12px 12px' : '14px 16px 16px',
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            alignItems: 'stretch',
+            scrollSnapType: isMobile ? 'x mandatory' : undefined,
+            WebkitOverflowScrolling: 'touch',
+          } as React.CSSProperties
+        }
       >
         {COLUMNS.map(col => (
           <KanbanColumn
@@ -1458,6 +1467,7 @@ export default function KanbanPage() {
             onAssignSprint={handleAssignSprint}
             onCardClick={note => navigate(`/editor/${note.id}`)}
             onAddTask={handleAddTask}
+            isMobile={isMobile}
           />
         ))}
       </div>

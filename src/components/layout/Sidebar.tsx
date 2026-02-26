@@ -309,6 +309,9 @@ export default function Sidebar() {
   // Effective open: when auto-hide mode, driven by hover; otherwise by Redux
   const effectiveOpen = sidebarAutoHide ? floatOpen : isOpen
 
+  // On mobile, use a wider drawer (82% of viewport, capped at 300px)
+  const mobileSidebarWidth = Math.min(Math.round(window.innerWidth * 0.82), 300)
+
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 768px)')
     const handler = (e: MediaQueryListEvent) => {
@@ -394,10 +397,16 @@ export default function Sidebar() {
     dispatch(addNote(note))
     dispatch(setActiveNoteId(note.id))
     navigate(`/editor/${note.id}`)
+    closeMobileDrawer()
+  }
+
+  function closeMobileDrawer() {
+    if (isMobile && isOpen) dispatch(setSidebarOpen(false))
   }
 
   function handleNewNote() {
     createNoteOfType('note')
+    closeMobileDrawer()
   }
 
   function handleDelete(n: Note) {
@@ -428,6 +437,7 @@ export default function Sidebar() {
     dispatch(addNote(copy))
     dispatch(setActiveNoteId(copy.id))
     navigate(`/editor/${copy.id}`)
+    closeMobileDrawer()
   }
 
   return (
@@ -451,7 +461,7 @@ export default function Sidebar() {
         animate={{
           width: isMobile
             ? isOpen
-              ? sidebarWidth
+              ? mobileSidebarWidth
               : 0
             : sidebarAutoHide
               ? floatOpen
@@ -460,7 +470,7 @@ export default function Sidebar() {
               : isOpen
                 ? sidebarWidth
                 : W_CLOSED,
-          x: isMobile && !isOpen ? -sidebarWidth : 0,
+          x: isMobile && !isOpen ? -mobileSidebarWidth : 0,
         }}
         transition={{ duration: 0.18, ease: 'easeInOut' }}
         onMouseEnter={handleSidebarEnter}
@@ -804,7 +814,7 @@ export default function Sidebar() {
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.12 }}
-              style={{ padding: '0 8px 6px', overflow: 'hidden' }}
+              style={{ padding: '6px 8px 6px', overflow: 'hidden' }}
             >
               <div style={{ position: 'relative' }}>
                 <svg
@@ -887,7 +897,13 @@ export default function Sidebar() {
         {/* Navigation */}
         <nav style={{ padding: '4px 8px', flexShrink: 0 }}>
           {NAV_ITEMS.map(({ to, label, Icon }) => (
-            <NavLink key={to} to={to} title={label} style={{ textDecoration: 'none' }}>
+            <NavLink
+              key={to}
+              to={to}
+              title={label}
+              style={{ textDecoration: 'none' }}
+              onClick={closeMobileDrawer}
+            >
               {({ isActive }) => (
                 <div
                   style={{
@@ -1309,7 +1325,11 @@ export default function Sidebar() {
                                   if (deleteConfirmId === n.id) setDeleteConfirmId(null)
                                 }}
                               >
-                                <NavLink to={`/editor/${n.id}`} style={{ textDecoration: 'none' }}>
+                                <NavLink
+                                  to={`/editor/${n.id}`}
+                                  style={{ textDecoration: 'none' }}
+                                  onClick={closeMobileDrawer}
+                                >
                                   {({ isActive }) => (
                                     <div
                                       style={{
