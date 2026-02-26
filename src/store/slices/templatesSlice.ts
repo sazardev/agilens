@@ -129,10 +129,27 @@ const templatesSlice = createSlice({
       state.templates = BUILTIN_TEMPLATES
       state.defaultTemplateId = 'tpl-note'
     },
+    /** Restore custom templates from a git clone/pull, always preserving builtins */
+    restoreTemplates(
+      state,
+      action: PayloadAction<{ templates: NoteTemplate[]; defaultTemplateId: string }>
+    ) {
+      const userTemplates = action.payload.templates.filter(t => !t.isBuiltin)
+      const builtinIds = new Set(BUILTIN_TEMPLATES.map(t => t.id))
+      const filteredUser = userTemplates.filter(t => !builtinIds.has(t.id))
+      state.templates = [...BUILTIN_TEMPLATES, ...filteredUser]
+      state.defaultTemplateId = action.payload.defaultTemplateId || 'tpl-note'
+    },
   },
 })
 
-export const { addTemplate, updateTemplate, deleteTemplate, setDefaultTemplate, resetToBuiltins } =
-  templatesSlice.actions
+export const {
+  addTemplate,
+  updateTemplate,
+  deleteTemplate,
+  setDefaultTemplate,
+  resetToBuiltins,
+  restoreTemplates,
+} = templatesSlice.actions
 
 export default templatesSlice.reducer

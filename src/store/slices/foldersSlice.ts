@@ -247,6 +247,9 @@ const foldersSlice = createSlice({
     clearAllFolders(state) {
       state.folders = []
     },
+    setFolders(state, action: PayloadAction<Folder[]>) {
+      state.folders = action.payload
+    },
   },
 })
 
@@ -261,6 +264,7 @@ export const {
   autoOrganize,
   clearSystemFolders,
   clearAllFolders,
+  setFolders,
 } = foldersSlice.actions
 
 // ─── Selectors ────────────────────────────────────────────────────────────────

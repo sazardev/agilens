@@ -2,13 +2,14 @@
  * OnboardingModal — Experiencia de bienvenida en el primer inicio.
  * Paso extra: configuración del proyecto (local / GitHub nuevo / importar / saltar).
  */
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import AgilensLogo from '@/components/layout/AgilensLogo'
 import { useAppDispatch, useAppSelector } from '@/store'
 import { gitInit, gitClone, GIT_DIR } from '@/store/slices/gitSlice'
 import { setGitHubConfig, updateSettings } from '@/store/slices/settingsSlice'
-import { verifyToken, createRepo } from '@/lib/github/api'
+import { verifyToken, createRepo, listUserRepos } from '@/lib/github/api'
+import type { GitHubRepoMeta } from '@/lib/github/api'
 import type { AccentColor, EditorFont, UITheme } from '@/types'
 
 interface Props {
@@ -425,6 +426,37 @@ export default function OnboardingModal({ onClose }: Props) {
   const [projectLoading, setProjectLoading] = useState(false)
   const [projectError, setProjectError] = useState<string | null>(null)
   const [projectDone, setProjectDone] = useState(false)
+  // ── Repo picker state (github-import) ────────────────────────────────────
+  const [repoList, setRepoList] = useState<GitHubRepoMeta[]>([])
+  const [repoListLoading, setRepoListLoading] = useState(false)
+  const [repoFilter, setRepoFilter] = useState('')
+  const [showRepoDrop, setShowRepoDrop] = useState(false)
+  const repoInputRef = useRef<HTMLInputElement>(null)
+  const [dropPos, setDropPos] = useState<{ bottom: number; left: number; width: number } | null>(
+    null
+  )
+
+  function updateDropPos() {
+    if (!repoInputRef.current) return
+    const r = repoInputRef.current.getBoundingClientRect()
+    setDropPos({ bottom: window.innerHeight - r.top + 4, left: r.left, width: r.width })
+  }
+
+  // Recalcular posición si el modal hace scroll mientras el dropdown está abierto
+  useEffect(() => {
+    if (!showRepoDrop) return
+    const handler = () => updateDropPos()
+    window.addEventListener('scroll', handler, true)
+    window.addEventListener('resize', handler)
+    return () => {
+      window.removeEventListener('scroll', handler, true)
+      window.removeEventListener('resize', handler)
+    }
+  }, [showRepoDrop])
+
+  const repoFiltered = repoList
+    .filter(r => !repoFilter.trim() || r.name.toLowerCase().includes(repoFilter.toLowerCase()))
+    .slice(0, 12)
 
   function go(n: number) {
     setDir(n > step ? 1 : -1)
@@ -432,6 +464,13 @@ export default function OnboardingModal({ onClose }: Props) {
   }
 
   // ── GitHub token verify ───────────────────────────────────────────────────
+  async function loadRepos(token: string) {
+    setRepoListLoading(true)
+    const repos = await listUserRepos(token)
+    setRepoList(repos)
+    setRepoListLoading(false)
+  }
+
   async function handleVerifyToken() {
     if (!ghToken.trim()) return
     setGhVerifying(true)
@@ -440,6 +479,10 @@ export default function OnboardingModal({ onClose }: Props) {
     const result = await verifyToken(ghToken.trim())
     if (result) {
       setGhVerifiedUser(result.login)
+      // Si el usuario está en modo import, precargamos sus repos
+      if (projectOption === 'github-import') {
+        void loadRepos(ghToken.trim())
+      }
     } else {
       setGhTokenError('Token inválido o sin permisos (scope "repo" requerido).')
     }
@@ -557,6 +600,10 @@ export default function OnboardingModal({ onClose }: Props) {
         onClick={() => {
           setProjectOption(id)
           setProjectError(null)
+          // Al seleccionar import, cargar repos si ya hay token verificado
+          if (id === 'github-import' && ghVerifiedUser && ghToken.trim()) {
+            void loadRepos(ghToken.trim())
+          }
         }}
         style={{
           textAlign: 'left',
@@ -1797,18 +1844,175 @@ export default function OnboardingModal({ onClose }: Props) {
                                       ? 'Repositorio existente'
                                       : 'Nombre del nuevo repo'}
                                   </label>
-                                  <input
-                                    type="text"
-                                    value={ghRepo}
-                                    placeholder={
-                                      projectOption === 'github-import'
-                                        ? 'agilens-notes'
-                                        : 'mis-notas-agilens'
-                                    }
-                                    onChange={e => setGhRepo(e.target.value)}
-                                    className="input-base"
-                                    style={{ fontSize: '12px' }}
-                                  />
+
+                                  {projectOption === 'github-import' ? (
+                                    /* ── Combo con sugerencias ── */
+                                    <div style={{ position: 'relative' }}>
+                                      <div style={{ position: 'relative' }}>
+                                        <input
+                                          type="text"
+                                          value={repoFilter}
+                                          placeholder={
+                                            repoListLoading
+                                              ? 'Cargando repos…'
+                                              : repoList.length > 0
+                                                ? `${repoList.length} repos — escribe para filtrar`
+                                                : 'Verificar token para ver repos'
+                                          }
+                                          ref={repoInputRef}
+                                          onChange={e => {
+                                            setRepoFilter(e.target.value)
+                                            setGhRepo(e.target.value)
+                                            updateDropPos()
+                                            setShowRepoDrop(true)
+                                          }}
+                                          onFocus={() => {
+                                            updateDropPos()
+                                            setShowRepoDrop(true)
+                                          }}
+                                          onBlur={() =>
+                                            setTimeout(() => setShowRepoDrop(false), 180)
+                                          }
+                                          className="input-base"
+                                          style={{
+                                            fontSize: '12px',
+                                            width: '100%',
+                                            boxSizing: 'border-box',
+                                            paddingRight: repoListLoading ? '36px' : undefined,
+                                          }}
+                                        />
+                                        {repoListLoading && (
+                                          <span
+                                            style={{
+                                              position: 'absolute',
+                                              right: '10px',
+                                              top: '50%',
+                                              transform: 'translateY(-50%)',
+                                              color: 'var(--text-3)',
+                                              display: 'flex',
+                                              pointerEvents: 'none',
+                                            }}
+                                          >
+                                            <IcoSpinner />
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Dropdown de sugerencias */}
+                                      {showRepoDrop && repoFiltered.length > 0 && dropPos && (
+                                        <div
+                                          style={{
+                                            position: 'fixed',
+                                            bottom: dropPos.bottom,
+                                            left: dropPos.left,
+                                            width: dropPos.width,
+                                            zIndex: 9999,
+                                            background: 'var(--bg-1)',
+                                            border: '1px solid var(--border-1)',
+                                            borderRadius: '8px',
+                                            maxHeight: '192px',
+                                            overflowY: 'auto',
+                                            boxShadow: '0 -8px 28px rgba(0,0,0,0.5)',
+                                          }}
+                                        >
+                                          {repoFiltered.map((r, idx) => (
+                                            <button
+                                              key={r.fullName}
+                                              type="button"
+                                              onMouseDown={e => {
+                                                e.preventDefault()
+                                                setGhRepo(r.name)
+                                                setRepoFilter(r.name)
+                                                setShowRepoDrop(false)
+                                              }}
+                                              style={{
+                                                width: '100%',
+                                                textAlign: 'left',
+                                                padding: '8px 12px',
+                                                background: 'none',
+                                                border: 'none',
+                                                borderBottom:
+                                                  idx < repoFiltered.length - 1
+                                                    ? '1px solid var(--border-1)'
+                                                    : 'none',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '2px',
+                                              }}
+                                            >
+                                              <div
+                                                style={{
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  gap: '6px',
+                                                }}
+                                              >
+                                                <span
+                                                  style={{
+                                                    fontSize: '12px',
+                                                    color: 'var(--text-1)',
+                                                    fontWeight: 500,
+                                                  }}
+                                                >
+                                                  {r.name}
+                                                </span>
+                                                {r.private && (
+                                                  <span
+                                                    style={{
+                                                      fontSize: '9px',
+                                                      padding: '1px 5px',
+                                                      borderRadius: '4px',
+                                                      background: 'var(--bg-3)',
+                                                      color: 'var(--text-3)',
+                                                      fontFamily: 'var(--font-mono)',
+                                                    }}
+                                                  >
+                                                    privado
+                                                  </span>
+                                                )}
+                                                {r.language && (
+                                                  <span
+                                                    style={{
+                                                      fontSize: '10px',
+                                                      color: 'var(--text-3)',
+                                                      marginLeft: 'auto',
+                                                    }}
+                                                  >
+                                                    {r.language}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              {r.description && (
+                                                <span
+                                                  style={{
+                                                    fontSize: '10px',
+                                                    color: 'var(--text-3)',
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    maxWidth: '100%',
+                                                  }}
+                                                >
+                                                  {r.description}
+                                                </span>
+                                              )}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    /* ── Input libre para repo nuevo ── */
+                                    <input
+                                      type="text"
+                                      value={ghRepo}
+                                      placeholder="mis-notas-agilens"
+                                      onChange={e => setGhRepo(e.target.value)}
+                                      className="input-base"
+                                      style={{ fontSize: '12px' }}
+                                    />
+                                  )}
                                 </div>
                                 <div
                                   style={{

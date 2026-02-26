@@ -3,6 +3,12 @@ import type { PayloadAction } from '@reduxjs/toolkit'
 import type { GitFileStatus, GitCommit, GitBranch, GitHubConfig } from '@/types'
 import * as gitClient from '@/lib/git/client'
 import { updateSettings } from '@/store/slices/settingsSlice'
+import { setNotes } from '@/store/slices/notesSlice'
+import { setEntries, setSprints } from '@/store/slices/dailySlice'
+import { setImpediments } from '@/store/slices/impedimentsSlice'
+import { setProjects } from '@/store/slices/projectsSlice'
+import { setFolders } from '@/store/slices/foldersSlice'
+import { restoreTemplates } from '@/store/slices/templatesSlice'
 
 export const GIT_DIR = '/agilens'
 
@@ -15,7 +21,9 @@ async function snapshot(dir: string) {
     gitClient.getBranches(dir),
   ])
   const currentBranch = branches.find(b => b.isCurrent)?.name ?? 'main'
-  return { status, log, branches, currentBranch }
+  // Resolve the remote tracking ref so we know which commits are already on GitHub
+  const remoteOid = await gitClient.getRemoteOid(dir, currentBranch)
+  return { status, log, branches, currentBranch, remoteOid }
 }
 
 // ─── Async thunks ─────────────────────────────────────────────────────────────
@@ -45,6 +53,17 @@ export const gitInit = createAsyncThunk(
     if (state.settings) {
       await gitClient.writeConfigFile(GIT_DIR, state.settings)
     }
+    // Write full app state so it can be restored on clone/pull
+    await gitClient.writeAppStateFile(GIT_DIR, {
+      notes: state.notes?.notes ?? [],
+      dailyEntries: state.daily?.entries ?? [],
+      sprints: state.daily?.sprints ?? [],
+      impediments: state.impediments?.impediments ?? [],
+      folders: state.folders?.folders ?? [],
+      projects: state.projects?.projects ?? [],
+      templates: state.templates?.templates ?? [],
+      defaultTemplateId: state.templates?.defaultTemplateId ?? 'tpl-note',
+    })
     // stage + commit notes + config
     await gitClient.commitAll(GIT_DIR, 'chore: init agilens repo', { name, email })
     const snap = await snapshot(GIT_DIR)
@@ -98,6 +117,17 @@ export const gitCommit = createAsyncThunk(
     if (state.settings) {
       await gitClient.writeConfigFile(dir, state.settings)
     }
+    // Write full app state so it can be restored on clone/pull
+    await gitClient.writeAppStateFile(dir, {
+      notes: state.notes?.notes ?? [],
+      dailyEntries: state.daily?.entries ?? [],
+      sprints: state.daily?.sprints ?? [],
+      impediments: state.impediments?.impediments ?? [],
+      folders: state.folders?.folders ?? [],
+      projects: state.projects?.projects ?? [],
+      templates: state.templates?.templates ?? [],
+      defaultTemplateId: state.templates?.defaultTemplateId ?? 'tpl-note',
+    })
     await gitClient.commitAll(dir, message, { name, email })
     return snapshot(dir)
   }
@@ -167,6 +197,17 @@ export const gitAutoCommit = createAsyncThunk(
     if (state.settings) {
       await gitClient.writeConfigFile(rootDir, state.settings)
     }
+    // Write full app state so it can be restored on clone/pull
+    await gitClient.writeAppStateFile(rootDir, {
+      notes: state.notes?.notes ?? [],
+      dailyEntries: state.daily?.entries ?? [],
+      sprints: state.daily?.sprints ?? [],
+      impediments: state.impediments?.impediments ?? [],
+      folders: state.folders?.folders ?? [],
+      projects: state.projects?.projects ?? [],
+      templates: state.templates?.templates ?? [],
+      defaultTemplateId: state.templates?.defaultTemplateId ?? 'tpl-note',
+    })
     await gitClient.writeNoteFile(rootDir, noteId, content)
     try {
       await gitClient.commitAll(rootDir, `note: ${noteTitle.slice(0, 60)}`, { name, email })
@@ -192,7 +233,61 @@ export const gitPull = createAsyncThunk(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(dispatch as any)(updateSettings(savedSettings))
     }
+    // Restore full app state from the saved snapshot in the repo
+    const appState = await gitClient.readAppStateFile(dir)
     const noteFiles = await gitClient.readNoteFilesFromFS(dir)
+    if (appState) {
+      // Merge note metadata (from JSON) with note content (from .md files)
+      const contentMapPull = new Map(noteFiles.map(f => [f.id, f.content]))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(
+        setNotes(
+          appState.notes.map(meta => ({
+            ...meta,
+            content: contentMapPull.get(meta.id) ?? '',
+          }))
+        )
+      )
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(setEntries(appState.dailyEntries))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(setSprints(appState.sprints))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(setImpediments(appState.impediments))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(setFolders(appState.folders))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(setProjects(appState.projects))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(
+        restoreTemplates({
+          templates: appState.templates,
+          defaultTemplateId: appState.defaultTemplateId,
+        })
+      )
+    } else if (noteFiles.length > 0) {
+      // Fallback for repos without agilens-app-state.json (imported/older repos)
+      const now = new Date().toISOString()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(
+        setNotes(
+          noteFiles.map(f => {
+            const firstLine = f.content.split('\n').find(l => l.trim()) ?? ''
+            const title = firstLine.startsWith('#') ? firstLine.replace(/^#+\s*/, '').trim() : f.id
+            return {
+              id: f.id,
+              title: title || f.id,
+              content: f.content,
+              noteType: 'note' as const,
+              tags: [],
+              createdAt: now,
+              updatedAt: now,
+              attachments: [],
+            }
+          })
+        )
+      )
+    }
     const snap = await snapshot(dir)
     return { ...snap, noteFiles }
   }
@@ -212,7 +307,61 @@ export const gitClone = createAsyncThunk(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(dispatch as any)(updateSettings(savedSettings))
     }
+    // Restore full app state from the saved snapshot in the repo
+    const appState = await gitClient.readAppStateFile(dir)
     const noteFiles = await gitClient.readNoteFilesFromFS(dir)
+    if (appState) {
+      // Merge note metadata (from JSON) with note content (from .md files)
+      const contentMapClone = new Map(noteFiles.map(f => [f.id, f.content]))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(
+        setNotes(
+          appState.notes.map(meta => ({
+            ...meta,
+            content: contentMapClone.get(meta.id) ?? '',
+          }))
+        )
+      )
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(setEntries(appState.dailyEntries))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(setSprints(appState.sprints))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(setImpediments(appState.impediments))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(setFolders(appState.folders))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(setProjects(appState.projects))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(
+        restoreTemplates({
+          templates: appState.templates,
+          defaultTemplateId: appState.defaultTemplateId,
+        })
+      )
+    } else if (noteFiles.length > 0) {
+      // Fallback for repos without agilens-app-state.json (imported/older repos)
+      const now = new Date().toISOString()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(dispatch as any)(
+        setNotes(
+          noteFiles.map(f => {
+            const firstLine = f.content.split('\n').find(l => l.trim()) ?? ''
+            const title = firstLine.startsWith('#') ? firstLine.replace(/^#+\s*/, '').trim() : f.id
+            return {
+              id: f.id,
+              title: title || f.id,
+              content: f.content,
+              noteType: 'note' as const,
+              tags: [],
+              createdAt: now,
+              updatedAt: now,
+              attachments: [],
+            }
+          })
+        )
+      )
+    }
     const snap = await snapshot(dir)
     return { rootDir: dir, ...snap, noteFiles }
   }
@@ -233,6 +382,8 @@ interface GitState {
   pullStatus: 'idle' | 'pulling' | 'success' | 'error'
   /** Unix ms timestamp of the last successful auto-commit — used to trigger HistoryPanel refresh */
   lastAutoCommitAt: number
+  /** OID of the most recent commit that was successfully pushed to remote (null = never pushed) */
+  lastPushedOid: string | null
 }
 
 const initialState: GitState = {
@@ -247,6 +398,7 @@ const initialState: GitState = {
   pushStatus: 'idle',
   pullStatus: 'idle',
   lastAutoCommitAt: 0,
+  lastPushedOid: null,
 }
 
 // ─── Slice ────────────────────────────────────────────────────────────────────
@@ -277,6 +429,7 @@ const gitSlice = createSlice({
         state.log = a.payload.log
         state.branches = a.payload.branches
         state.currentBranch = a.payload.currentBranch
+        state.lastPushedOid = a.payload.remoteOid ?? null
       })
       .addCase(gitInit.rejected, (state, a) => {
         state.loading = false
@@ -294,6 +447,7 @@ const gitSlice = createSlice({
         state.log = a.payload.log
         state.branches = a.payload.branches
         state.currentBranch = a.payload.currentBranch
+        state.lastPushedOid = a.payload.remoteOid ?? null
       })
       .addCase(gitRefresh.rejected, (state, a) => {
         state.loading = false
@@ -311,6 +465,7 @@ const gitSlice = createSlice({
         state.log = a.payload.log
         state.branches = a.payload.branches
         state.currentBranch = a.payload.currentBranch
+        state.lastPushedOid = a.payload.remoteOid ?? null
       })
       .addCase(gitSyncStatus.rejected, (state, a) => {
         state.loading = false
@@ -329,6 +484,7 @@ const gitSlice = createSlice({
         state.log = a.payload.log
         state.branches = a.payload.branches
         state.currentBranch = a.payload.currentBranch
+        state.lastPushedOid = a.payload.remoteOid ?? null
       })
       .addCase(gitCommit.rejected, (state, a) => {
         state.loading = false
@@ -343,6 +499,8 @@ const gitSlice = createSlice({
       })
       .addCase(gitPush.fulfilled, state => {
         state.pushStatus = 'success'
+        // Record the commit that was just pushed so we can compute "unpushed" count
+        state.lastPushedOid = state.log[0]?.oid ?? null
         setTimeout(() => {
           state.pushStatus = 'idle'
         }, 3000)
@@ -363,6 +521,7 @@ const gitSlice = createSlice({
       state.log = a.payload.log
       state.branches = a.payload.branches
       state.currentBranch = a.payload.currentBranch
+      state.lastPushedOid = a.payload.remoteOid ?? null
     })
 
     // ── gitAutoCommit ──
@@ -373,6 +532,7 @@ const gitSlice = createSlice({
       state.branches = a.payload.branches
       state.currentBranch = a.payload.currentBranch
       state.lastAutoCommitAt = Date.now()
+      state.lastPushedOid = a.payload.remoteOid ?? null
     })
 
     // ── gitDetect ──
@@ -384,6 +544,7 @@ const gitSlice = createSlice({
       state.log = a.payload.log
       state.branches = a.payload.branches
       state.currentBranch = a.payload.currentBranch
+      state.lastPushedOid = a.payload.remoteOid ?? null
     })
 
     // ── gitPull ──
@@ -398,6 +559,7 @@ const gitSlice = createSlice({
         state.log = a.payload.log
         state.branches = a.payload.branches
         state.currentBranch = a.payload.currentBranch
+        state.lastPushedOid = a.payload.remoteOid ?? null
       })
       .addCase(gitPull.rejected, (state, a) => {
         state.pullStatus = 'error'
@@ -418,6 +580,7 @@ const gitSlice = createSlice({
         state.log = a.payload.log
         state.branches = a.payload.branches
         state.currentBranch = a.payload.currentBranch
+        state.lastPushedOid = a.payload.remoteOid ?? null
       })
       .addCase(gitClone.rejected, (state, a) => {
         state.loading = false

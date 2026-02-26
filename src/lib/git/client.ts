@@ -5,7 +5,20 @@
 import git from 'isomorphic-git'
 import http from 'isomorphic-git/http/web'
 import LightningFS from '@isomorphic-git/lightning-fs'
-import type { GitCommit, GitFileStatus, GitBranch, GitHubConfig, AppSettings } from '@/types'
+import type {
+  GitCommit,
+  GitFileStatus,
+  GitBranch,
+  GitHubConfig,
+  AppSettings,
+  Note,
+  DailyEntry,
+  Sprint,
+  Impediment,
+  Folder,
+  Project,
+  NoteTemplate,
+} from '@/types'
 
 // ─── Filesystem ────────────────────────────────────────────────────────────────
 
@@ -95,6 +108,18 @@ export async function getNoteLog(dir: string, noteId: string): Promise<GitCommit
 }
 
 // ─── Branches ──────────────────────────────────────────────────────────────────
+
+/**
+ * Returns the OID that the remote tracking ref (refs/remotes/origin/<branch>)
+ * points to, or null if the ref doesn't exist (never pushed / no remote).
+ */
+export async function getRemoteOid(dir: string, branch: string): Promise<string | null> {
+  try {
+    return await git.resolveRef({ fs, dir, ref: `refs/remotes/origin/${branch}` })
+  } catch {
+    return null
+  }
+}
 
 export async function getBranches(dir: string): Promise<GitBranch[]> {
   const [local, current] = await Promise.all([
@@ -327,6 +352,61 @@ export async function readConfigFile(dir: string): Promise<Partial<AppSettings> 
   }
 }
 
+// ─── App state snapshot (full data — notes metadata, daily, sprints, etc.) ─────────────────
+
+/**
+ * Note metadata stored in agilens-app-state.json.
+ * `content` is intentionally excluded — it lives in notes/*.md for
+ * clean diffs, human readability and efficient git history.
+ */
+export type NoteMetadata = Omit<Note, 'content'>
+
+export interface AppStateData {
+  notes: NoteMetadata[] // no content — read from .md files on restore
+  dailyEntries: DailyEntry[]
+  sprints: Sprint[]
+  impediments: Impediment[]
+  folders: Folder[]
+  projects: Project[]
+  templates: NoteTemplate[]
+  defaultTemplateId: string
+}
+
+/**
+ * Write agilens-app-state.json — note metadata + all other Redux data.
+ * Note content is NOT stored here — it lives in notes/*.md files.
+ * Attachment dataUrls (blobs) are also excluded.
+ *
+ * Accepts full Note[] from Redux and strips content + blobs before writing.
+ */
+export async function writeAppStateFile(
+  dir: string,
+  data: Omit<AppStateData, 'notes'> & { notes: Note[] }
+): Promise<void> {
+  const toStore: AppStateData = {
+    ...data,
+    // Strip content (lives in .md) and blob dataUrls (live in IndexedDB)
+    notes: data.notes.map(({ content: _c, attachments, ...meta }) => ({
+      ...meta,
+      attachments: (attachments ?? []).map(({ dataUrl: _d, ...rest }) => rest),
+    })),
+  }
+  await pfs.writeFile(`${dir}/agilens-app-state.json`, JSON.stringify(toStore, null, 2), 'utf8')
+}
+
+/**
+ * Read agilens-app-state.json from LightningFS.
+ * Returns null if the file is absent or unparseable.
+ */
+export async function readAppStateFile(dir: string): Promise<AppStateData | null> {
+  try {
+    const raw = (await pfs.readFile(`${dir}/agilens-app-state.json`, 'utf8')) as string
+    return JSON.parse(raw) as AppStateData
+  } catch {
+    return null
+  }
+}
+
 /**
  * Sync the entire notes array to LightningFS:
  *  - Write/overwrite every note that exists in Redux
@@ -404,8 +484,10 @@ export async function getChangedFilesInCommit(
     dir,
     trees: [git.TREE({ ref: commitOid }), git.TREE({ ref: parentOid })],
     map: async (filepath, [head, base]) => {
-      if (filepath === '.') return null
+      if (filepath === '.') return // root — recurse but don't emit
       const [headType, baseType] = await Promise.all([head?.type(), base?.type()])
+      // For directory entries (tree), return undefined so git.walk recurses into them
+      if (headType === 'tree' || baseType === 'tree') return
       if (headType !== 'blob' && baseType !== 'blob') return null
       const [headOid, baseOid] = await Promise.all([head?.oid(), base?.oid()])
       if (!baseOid && headOid) results.push({ path: filepath, status: 'added' })

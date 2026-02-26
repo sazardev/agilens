@@ -24,6 +24,8 @@ import {
   GIT_DIR,
 } from '@/store/slices/gitSlice'
 import { updateNote, addNote } from '@/store/slices/notesSlice'
+import { setGitHubConfig } from '@/store/slices/settingsSlice'
+import { listUserRepos, type GitHubRepoMeta } from '@/lib/github/api'
 import type { Note } from '@/types'
 import {
   getChangedFilesInCommit,
@@ -461,8 +463,17 @@ function FileRow({ path, status, title }: { path: string; status: string; title:
 
 export default function GitPage() {
   const dispatch = useAppDispatch()
-  const { initialized, status, log, branches, currentBranch, loading, error, pushStatus } =
-    useAppSelector(s => s.git)
+  const {
+    initialized,
+    status,
+    log,
+    branches,
+    currentBranch,
+    loading,
+    error,
+    pushStatus,
+    lastPushedOid,
+  } = useAppSelector(s => s.git)
   const pullStatus = useAppSelector(s => s.git.pullStatus)
   const settings = useAppSelector(s => s.settings)
   const notes = useAppSelector(s => s.notes.notes)
@@ -472,9 +483,24 @@ export default function GitPage() {
   const [selectedOid, setSelectedOid] = useState<string | null>(null)
   const [diffData, setDiffData] = useState<CommitDiffData | null>(null)
   const [diffLoading, setDiffLoading] = useState(false)
+  const [diffError, setDiffError] = useState<string | null>(null)
   const [activeFileIdx, setActiveFileIdx] = useState(0)
   const navigate = useNavigate()
   const isMobile = useMobile()
+
+  // ── GitHub import state ────────────────────────────────────────────────────
+  const [ghRepos, setGhRepos] = useState<GitHubRepoMeta[]>([])
+  const [ghReposLoading, setGhReposLoading] = useState(false)
+  const [ghReposLoaded, setGhReposLoaded] = useState(false)
+  const [ghReposError, setGhReposError] = useState('')
+  const [ghRepoSearch, setGhRepoSearch] = useState('')
+  const [ghSelectedRepo, setGhSelectedRepo] = useState<GitHubRepoMeta | null>(null)
+  const [ghBranch, setGhBranch] = useState('main')
+  const [ghImportStatus, setGhImportStatus] = useState<'idle' | 'importing' | 'done' | 'error'>(
+    'idle'
+  )
+  const [ghImportError, setGhImportError] = useState('')
+  const [showGhPicker, setShowGhPicker] = useState(false)
 
   // Sync note files to LightningFS then refresh git status whenever
   // the note list changes or we navigate to this page
@@ -492,10 +518,13 @@ export default function GitPage() {
   useEffect(() => {
     if (!selectedOid) {
       setDiffData(null)
+      setDiffError(null)
       return
     }
     let cancelled = false
     setDiffLoading(true)
+    setDiffData(null)
+    setDiffError(null)
     setActiveFileIdx(0)
 
     async function loadDiff() {
@@ -535,8 +564,11 @@ export default function GitPage() {
         setDiffLoading(false)
       }
     }
-    void loadDiff().catch(() => {
-      if (!cancelled) setDiffLoading(false)
+    void loadDiff().catch((err: unknown) => {
+      if (!cancelled) {
+        setDiffLoading(false)
+        setDiffError(err instanceof Error ? err.message : 'Error al cargar el diff de este commit.')
+      }
     })
     return () => {
       cancelled = true
@@ -595,12 +627,37 @@ export default function GitPage() {
       }
     }
   }
-  async function handleClone() {
-    if (!settings.github) return
-    const result = await dispatch(gitClone({ dir: GIT_DIR, config: settings.github }))
+  function handleCheckout(ref: string) {
+    void dispatch(gitCheckout({ dir: GIT_DIR, ref }))
+    setShowBranches(false)
+  }
+
+  async function loadGhRepos() {
+    if (!settings.github?.token) return
+    setGhReposLoading(true)
+    setGhReposError('')
+    try {
+      const repos = await listUserRepos(settings.github.token)
+      setGhRepos(repos)
+      setGhReposLoaded(true)
+    } catch (e) {
+      setGhReposError(e instanceof Error ? e.message : 'Error al cargar repositorios')
+    } finally {
+      setGhReposLoading(false)
+    }
+  }
+
+  async function handleGhImport() {
+    if (!settings.github || !ghSelectedRepo) return
+    setGhImportStatus('importing')
+    setGhImportError('')
+    const [owner, repo] = ghSelectedRepo.fullName.split('/')
+    const config = { ...settings.github, owner, repo, branch: ghBranch }
+    dispatch(setGitHubConfig(config))
+    const result = await dispatch(gitClone({ dir: GIT_DIR, config }))
     if (gitClone.fulfilled.match(result)) {
       for (const { id, content } of result.payload.noteFiles) {
-        const existing = notes.find((n: Note) => n.id === id)
+        const existing = (notes as Note[]).find(n => n.id === id)
         if (existing) {
           dispatch(updateNote({ id, content }))
         } else {
@@ -619,11 +676,11 @@ export default function GitPage() {
           )
         }
       }
+      setGhImportStatus('done')
+    } else {
+      setGhImportStatus('error')
+      setGhImportError(typeof result.payload === 'string' ? result.payload : 'Error al importar')
     }
-  }
-  function handleCheckout(ref: string) {
-    void dispatch(gitCheckout({ dir: GIT_DIR, ref }))
-    setShowBranches(false)
   }
 
   const resolveName = useCallback(
@@ -841,16 +898,394 @@ export default function GitPage() {
         >
           {loading ? 'Inicializando…' : 'Inicializar repositorio'}
         </button>
-        {settings.github && (
+
+        {/* ── Importar desde GitHub ──────────────────────────────────────── */}
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '420px',
+            background: 'var(--bg-2)',
+            border: '1px solid var(--border-2)',
+            borderRadius: 'var(--radius-lg)',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Header row */}
           <button
-            className="btn btn-ghost"
-            onClick={() => void handleClone()}
-            disabled={loading}
-            style={{ minWidth: '180px' }}
+            onClick={() => {
+              setShowGhPicker(p => !p)
+              if (!ghReposLoaded && settings.github?.token) void loadGhRepos()
+            }}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              padding: '12px 16px',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text-0)',
+            }}
           >
-            {loading ? 'Importando…' : `\u2193 Importar desde GitHub · ${settings.github.repo}`}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--accent-400)"
+                strokeWidth="2"
+              >
+                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22" />
+              </svg>
+              <div style={{ textAlign: 'left' as const }}>
+                <div style={{ fontSize: '13px', fontWeight: 600 }}>Importar desde GitHub</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-3)', marginTop: '1px' }}>
+                  {settings.github?.token
+                    ? 'Elige un repositorio de tu cuenta'
+                    : 'Conecta GitHub en Ajustes primero'}
+                </div>
+              </div>
+            </div>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--text-3)"
+              strokeWidth="2"
+              style={{
+                transition: 'transform 0.2s',
+                transform: showGhPicker ? 'rotate(180deg)' : 'none',
+                flexShrink: 0,
+              }}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </button>
-        )}
+
+          {/* Collapsible picker */}
+          {showGhPicker && (
+            <div
+              style={{
+                borderTop: '1px solid var(--border-1)',
+                padding: '14px 16px',
+                display: 'flex',
+                flexDirection: 'column' as const,
+                gap: '10px',
+              }}
+            >
+              {!settings.github?.token ? (
+                <div
+                  style={{
+                    fontSize: '12px',
+                    color: 'var(--text-3)',
+                    textAlign: 'center' as const,
+                    padding: '8px 0',
+                  }}
+                >
+                  Ve a{' '}
+                  <button
+                    onClick={() => navigate('/settings')}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--accent-400)',
+                      cursor: 'pointer',
+                      padding: 0,
+                      fontSize: '12px',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Ajustes → GitHub
+                  </button>{' '}
+                  y conecta tu token para importar repos.
+                </div>
+              ) : (
+                <>
+                  {/* Load / reload button */}
+                  <button
+                    onClick={() => void loadGhRepos()}
+                    disabled={ghReposLoading}
+                    style={{
+                      alignSelf: 'flex-start' as const,
+                      padding: '5px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-2)',
+                      background: 'var(--bg-1)',
+                      color: 'var(--text-1)',
+                      cursor: ghReposLoading ? 'not-allowed' : 'pointer',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    {ghReposLoading ? (
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        style={{ animation: 'spin 1s linear infinite' }}
+                      >
+                        <path d="M21 12a9 9 0 11-6.219-8.56" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <polyline points="1 4 1 10 7 10" />
+                        <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
+                      </svg>
+                    )}
+                    {ghReposLoading
+                      ? 'Cargando…'
+                      : ghReposLoaded
+                        ? 'Recargar'
+                        : 'Cargar mis repositorios'}
+                  </button>
+
+                  {ghReposError && (
+                    <div style={{ fontSize: '11px', color: '#ef4444' }}>{ghReposError}</div>
+                  )}
+
+                  {ghReposLoaded && ghRepos.length > 0 && (
+                    <>
+                      <input
+                        type="text"
+                        placeholder="Buscar repositorio…"
+                        value={ghRepoSearch}
+                        onChange={e => setGhRepoSearch(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '6px 10px',
+                          background: 'var(--bg-1)',
+                          border: '1px solid var(--border-2)',
+                          borderRadius: 'var(--radius-md)',
+                          color: 'var(--text-0)',
+                          fontSize: '12px',
+                          outline: 'none',
+                          boxSizing: 'border-box' as const,
+                        }}
+                      />
+                      <div
+                        style={{
+                          maxHeight: '200px',
+                          overflowY: 'auto' as const,
+                          display: 'flex',
+                          flexDirection: 'column' as const,
+                          gap: '3px',
+                        }}
+                      >
+                        {ghRepos
+                          .filter(r =>
+                            ghRepoSearch.trim()
+                              ? r.fullName.toLowerCase().includes(ghRepoSearch.toLowerCase())
+                              : true
+                          )
+                          .map(repo => {
+                            const sel = ghSelectedRepo?.fullName === repo.fullName
+                            return (
+                              <button
+                                key={repo.fullName}
+                                onClick={() => {
+                                  setGhSelectedRepo(repo)
+                                  setGhImportStatus('idle')
+                                  setGhImportError('')
+                                }}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  padding: '7px 10px',
+                                  borderRadius: 'var(--radius-md)',
+                                  border: `1px solid ${sel ? 'var(--accent-600)' : 'transparent'}`,
+                                  background: sel ? 'var(--accent-glow)' : 'var(--bg-1)',
+                                  cursor: 'pointer',
+                                  textAlign: 'left' as const,
+                                }}
+                              >
+                                <svg
+                                  width="12"
+                                  height="12"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke={sel ? 'var(--accent-400)' : 'var(--text-3)'}
+                                  strokeWidth="2"
+                                  style={{ flexShrink: 0 }}
+                                >
+                                  <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22" />
+                                </svg>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div
+                                    style={{
+                                      fontSize: '12px',
+                                      fontWeight: sel ? 600 : 400,
+                                      color: sel ? 'var(--accent-400)' : 'var(--text-0)',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap' as const,
+                                    }}
+                                  >
+                                    {repo.fullName}
+                                    {repo.private && (
+                                      <span
+                                        style={{
+                                          marginLeft: '5px',
+                                          fontSize: '10px',
+                                          color: 'var(--text-3)',
+                                          background: 'var(--bg-3)',
+                                          padding: '1px 4px',
+                                          borderRadius: '3px',
+                                        }}
+                                      >
+                                        privado
+                                      </span>
+                                    )}
+                                  </div>
+                                  {repo.description && (
+                                    <div
+                                      style={{
+                                        fontSize: '10px',
+                                        color: 'var(--text-3)',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap' as const,
+                                      }}
+                                    >
+                                      {repo.description}
+                                    </div>
+                                  )}
+                                </div>
+                              </button>
+                            )
+                          })}
+                      </div>
+                    </>
+                  )}
+
+                  {ghSelectedRepo && (
+                    <div
+                      style={{
+                        background: 'var(--bg-1)',
+                        border: '1px solid var(--accent-600)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '10px',
+                        display: 'flex',
+                        flexDirection: 'column' as const,
+                        gap: '8px',
+                      }}
+                    >
+                      <div
+                        style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-400)' }}
+                      >
+                        📦 {ghSelectedRepo.fullName}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <label style={{ fontSize: '11px', color: 'var(--text-2)', flexShrink: 0 }}>
+                          Rama:
+                        </label>
+                        <input
+                          type="text"
+                          value={ghBranch}
+                          onChange={e => setGhBranch(e.target.value)}
+                          placeholder="main"
+                          style={{
+                            flex: 1,
+                            padding: '4px 8px',
+                            background: 'var(--bg-2)',
+                            border: '1px solid var(--border-2)',
+                            borderRadius: 'var(--radius-md)',
+                            color: 'var(--text-0)',
+                            fontSize: '12px',
+                            fontFamily: 'var(--font-mono)',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+                      {ghImportStatus === 'done' ? (
+                        <div style={{ fontSize: '12px', color: '#34d399', fontWeight: 500 }}>
+                          ✓ Repositorio importado correctamente
+                        </div>
+                      ) : (
+                        <>
+                          {ghImportStatus === 'error' && (
+                            <div style={{ fontSize: '11px', color: '#ef4444' }}>
+                              {ghImportError}
+                            </div>
+                          )}
+                          <button
+                            onClick={() => void handleGhImport()}
+                            disabled={ghImportStatus === 'importing'}
+                            style={{
+                              padding: '7px 14px',
+                              borderRadius: 'var(--radius-md)',
+                              border: 'none',
+                              background:
+                                ghImportStatus === 'importing'
+                                  ? 'var(--bg-3)'
+                                  : 'var(--accent-500)',
+                              color: ghImportStatus === 'importing' ? 'var(--text-2)' : '#fff',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: ghImportStatus === 'importing' ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                            }}
+                          >
+                            {ghImportStatus === 'importing' ? (
+                              <>
+                                <svg
+                                  width="11"
+                                  height="11"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  style={{ animation: 'spin 1s linear infinite' }}
+                                >
+                                  <path d="M21 12a9 9 0 11-6.219-8.56" />
+                                </svg>
+                                Importando…
+                              </>
+                            ) : (
+                              <>
+                                <svg
+                                  width="11"
+                                  height="11"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                >
+                                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                                  <polyline points="7 10 12 15 17 10" />
+                                  <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                Importar notas de este repositorio
+                              </>
+                            )}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
       </div>
     )
@@ -863,6 +1298,14 @@ export default function GitPage() {
     f => !f.path.startsWith('notes/') && !f.path.startsWith('attachments/')
   )
   const lastCommit = log[0]
+
+  // Commits not yet pushed: slice of log before the lastPushedOid commit
+  const unpushedCount = lastPushedOid
+    ? Math.max(
+        0,
+        log.findIndex(c => c.oid === lastPushedOid)
+      )
+    : log.length
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -880,13 +1323,20 @@ export default function GitPage() {
       >
         {(
           [
-            { label: 'Commits', value: String(log.length) },
-            { label: 'Pendientes', value: String(status.length) },
-            { label: 'Notas', value: String(noteFiles.length) },
-            { label: 'Adjuntos', value: String(attachFiles.length) },
-            { label: 'Rama', value: currentBranch },
-            ...(lastCommit ? [{ label: 'Último', value: timeAgo(lastCommit.timestamp) }] : []),
-          ] as Array<{ label: string; value: string }>
+            { label: 'Commits', value: String(log.length), accent: false },
+            {
+              label: 'Sin push',
+              value: String(unpushedCount),
+              accent: unpushedCount > 0,
+            },
+            { label: 'Pendientes', value: String(status.length), accent: false },
+            { label: 'Notas', value: String(noteFiles.length), accent: false },
+            { label: 'Adjuntos', value: String(attachFiles.length), accent: false },
+            { label: 'Rama', value: currentBranch, accent: false },
+            ...(lastCommit
+              ? [{ label: 'Último', value: timeAgo(lastCommit.timestamp), accent: false }]
+              : []),
+          ] as Array<{ label: string; value: string; accent: boolean }>
         ).map((stat, i) => (
           <div
             key={i}
@@ -898,15 +1348,18 @@ export default function GitPage() {
               borderRight: '1px solid var(--border-1)',
               height: '100%',
               flexShrink: 0,
+              background: stat.accent ? 'rgba(251,146,60,0.06)' : undefined,
             }}
           >
-            <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>{stat.label}</span>
+            <span style={{ fontSize: '11px', color: stat.accent ? '#fb923c' : 'var(--text-3)' }}>
+              {stat.label}
+            </span>
             <span
               style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: '12px',
                 fontWeight: 600,
-                color: 'var(--text-0)',
+                color: stat.accent ? '#fb923c' : 'var(--text-0)',
               }}
             >
               {stat.value}
@@ -1176,17 +1629,19 @@ export default function GitPage() {
             <div style={{ display: 'flex', gap: '6px' }}>
               <button
                 className="btn btn-ghost"
-                style={{ flex: 1 }}
+                style={{ flex: 1, position: 'relative' }}
                 disabled={!settings.github || pushStatus === 'pushing'}
                 onClick={handlePush}
               >
                 {pushStatus === 'pushing'
                   ? 'Enviando…'
                   : pushStatus === 'success'
-                    ? '✓ Push OK'
+                    ? '✓ Enviado'
                     : pushStatus === 'error'
                       ? '✗ Error'
-                      : '↑ Push'}
+                      : unpushedCount > 0
+                        ? `↑ Push · ${unpushedCount}`
+                        : '↑ Push'}
               </button>
               <button
                 className="btn btn-ghost"
@@ -1274,10 +1729,40 @@ export default function GitPage() {
               Sin commits aún. Haz tu primer commit.
             </div>
           )}
+          {unpushedCount > 0 && log.length > 0 && (
+            <div
+              style={{
+                margin: '0 10px 4px',
+                padding: '5px 10px',
+                background: 'rgba(251,146,60,0.08)',
+                border: '1px solid rgba(251,146,60,0.25)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '11px',
+                color: '#fb923c',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <svg
+                width="10"
+                height="10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                viewBox="0 0 24 24"
+              >
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+              </svg>
+              {unpushedCount} commit{unpushedCount !== 1 ? 's' : ''} pendientes de push
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', padding: '4px 0 20px' }}>
             {log.map((commit, i) => {
               const isSelected = commit.oid === selectedOid
               const isHead = i === 0
+              const isUnpushed = i < unpushedCount
               const ct = getCommitType(commit.message)
               const date = new Date(commit.timestamp * 1000)
               return (
@@ -1293,7 +1778,13 @@ export default function GitPage() {
                     cursor: 'pointer',
                     textAlign: 'left',
                     background: isSelected ? 'var(--accent-glow)' : 'transparent',
-                    borderLeft: `3px solid ${isSelected ? 'var(--accent-500)' : 'transparent'}`,
+                    borderLeft: `3px solid ${
+                      isSelected
+                        ? 'var(--accent-500)'
+                        : isUnpushed
+                          ? 'rgba(251,146,60,0.4)'
+                          : 'transparent'
+                    }`,
                     transition: 'background var(--transition-fast)',
                   }}
                   onMouseEnter={e => {
@@ -1322,6 +1813,22 @@ export default function GitPage() {
                         style={{ fontSize: '9px', padding: '1px 5px' }}
                       >
                         HEAD
+                      </span>
+                    )}
+                    {isUnpushed && (
+                      <span
+                        title="Sin enviar al remoto"
+                        style={{
+                          fontSize: '9px',
+                          fontWeight: 700,
+                          color: '#fb923c',
+                          background: 'rgba(251,146,60,0.12)',
+                          padding: '1px 5px',
+                          borderRadius: '3px',
+                          flexShrink: 0,
+                        }}
+                      >
+                        ↑ local
                       </span>
                     )}
                     {ct && (
@@ -1548,12 +2055,38 @@ export default function GitPage() {
                   Cargando diff…
                 </div>
               )}
-              {!diffLoading && diffData && diffData.files.length === 0 && (
+              {!diffLoading && diffError && (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    padding: '12px',
+                    background: 'rgba(239,68,68,0.06)',
+                    border: '1px solid rgba(239,68,68,0.2)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '12px',
+                    color: '#f87171',
+                  }}
+                >
+                  <strong>No se pudo cargar el diff</strong>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '11px',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {diffError}
+                  </span>
+                </div>
+              )}
+              {!diffLoading && !diffError && diffData && diffData.files.length === 0 && (
                 <div style={{ color: 'var(--text-3)', fontSize: '13px' }}>
                   Sin archivos modificados en este commit.
                 </div>
               )}
-              {!diffLoading && diffData && diffData.files[activeFileIdx] && (
+              {!diffLoading && !diffError && diffData && diffData.files[activeFileIdx] && (
                 <>
                   {/* Summary */}
                   <div
