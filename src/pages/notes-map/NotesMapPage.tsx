@@ -97,9 +97,9 @@ const IMP_COLORS: Record<string, string> = {
 const DEFAULT_PHYSICS = {
   repulsion: 2800,
   springLength: 120,
-  springK: 0.05,
-  gravity: 0.015,
-  damping: 0.68,
+  springK: 0.03,
+  gravity: 0.012,
+  damping: 0.88,
 }
 
 interface PhysicsParams {
@@ -110,7 +110,7 @@ interface PhysicsParams {
   damping: number
 }
 
-const MAX_VELOCITY = 5
+const MAX_VELOCITY = 3
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -601,11 +601,23 @@ function simulationStep(
       node.vy += (cy - node.y) * gravity
     }
   } else if (gravityMode === 'sprint' || gravityMode === 'project') {
-    // Island mode: members are pulled toward their anchor; anchors are NOT
-    // pulled to the center (their position is determined by mutual repulsion).
-    // A soft non-linear boundary prevents any node from drifting off-screen.
+    // Island mode: each anchor is assigned a stable target position on a circle
+    // so it always converges to a fixed equilibrium (no orbit possible).
     const anchorKind: NodeKind = gravityMode === 'sprint' ? 'sprint' : 'project'
-    const softBoundary = Math.min(cx, cy) * 0.75
+    const anchorNodes = nodes.filter(n => n.kind === anchorKind)
+    const anchorCount = anchorNodes.length
+    const orbitRadius = Math.min(cx, cy) * 0.42
+
+    // Assign each anchor a fixed slot on the ring and spring it there
+    anchorNodes.forEach((anchor, i) => {
+      if (anchor.pinned) return
+      const angle = (2 * Math.PI * i) / Math.max(anchorCount, 1) - Math.PI / 2
+      const targetX = cx + Math.cos(angle) * orbitRadius
+      const targetY = cy + Math.sin(angle) * orbitRadius
+      anchor.vx += (targetX - anchor.x) * gravity * 4.0
+      anchor.vy += (targetY - anchor.y) * gravity * 4.0
+    })
+
     for (const node of nodes) {
       if (node.pinned) continue
       const groupId = gravityMode === 'sprint' ? node.groupSprintId : node.groupProjectId
@@ -619,20 +631,10 @@ function simulationStep(
         }
       }
 
-      // Orphan nodes (no group): weak pull toward center so they form their own island
-      if (!groupId) {
+      // Orphan nodes (no group): weak pull toward center
+      if (!groupId && node.kind !== anchorKind) {
         node.vx += (cx - node.x) * gravity * 0.25
         node.vy += (cy - node.y) * gravity * 0.25
-      }
-
-      // Soft boundary: linear nudge toward center when far out
-      const bdx = cx - node.x
-      const bdy = cy - node.y
-      const bdist = Math.sqrt(bdx * bdx + bdy * bdy)
-      if (bdist > softBoundary) {
-        const excess = (bdist - softBoundary) / softBoundary
-        node.vx += (bdx / bdist) * gravity * 0.8 * excess
-        node.vy += (bdy / bdist) * gravity * 0.8 * excess
       }
     }
   }
@@ -2271,14 +2273,21 @@ export default function NotesMapPage() {
           physicsRef.current,
           gravityModeRef.current
         )
-        // Stop sim when velocity is low
+        // Stop sim when velocity is low — hard-freeze all nodes on settle
         const maxV = nodesRef.current.reduce(
           (m, n) => Math.max(m, Math.abs(n.vx) + Math.abs(n.vy)),
           0
         )
-        if (maxV < 0.08) {
+        if (maxV < 0.05) {
           stepsWithoutMotion++
-          if (stepsWithoutMotion > 25) simRunning.current = false
+          if (stepsWithoutMotion > 30) {
+            simRunning.current = false
+            // Zero out all velocities so nodes are truly frozen
+            for (const node of nodesRef.current) {
+              node.vx = 0
+              node.vy = 0
+            }
+          }
         } else {
           stepsWithoutMotion = 0
         }
@@ -2354,6 +2363,7 @@ export default function NotesMapPage() {
     if (hit) {
       dragNodeId.current = hit.id
       hit.pinned = true
+      simRunning.current = true // only restart sim when dragging a node
     } else {
       isDraggingCanvas.current = true
       dragStart.current = {
@@ -2361,7 +2371,6 @@ export default function NotesMapPage() {
         y: e.clientY - transformRef.current.y,
       }
     }
-    simRunning.current = true
   }, [])
 
   const onMouseMove = useCallback((e: RMouseEvent<HTMLCanvasElement>) => {
