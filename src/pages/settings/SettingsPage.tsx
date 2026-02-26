@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { useMobile } from '@/hooks/useMobile'
 import type { AccentColor, EditorFont, UIDensity, UITheme, MarkdownPreviewFont } from '@/types'
 import AgilensLogo from '@/components/layout/AgilensLogo'
-import OnboardingModal from '@/components/onboarding/OnboardingModal'
+import LandingPage from '@/pages/landing/LandingPage'
 import GitHubConnect from '@/components/github/GitHubConnect'
 import { hashPassword, clearActivity, touchActivity } from '@/components/security/LockScreen'
 import { setNotes } from '@/store/slices/notesSlice'
@@ -146,7 +146,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 export default function SettingsPage() {
   const dispatch = useAppDispatch()
   const s = useAppSelector(st => st.settings)
-  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [showLanding, setShowLanding] = useState(false)
 
   // ── Lock / security state ──────────────────────────────────────────────────
   const [pwdStep, setPwdStep] = useState<'idle' | 'set' | 'change' | 'remove'>('idle')
@@ -1830,7 +1830,7 @@ export default function SettingsPage() {
 
               {/* Relaunch tutorial button */}
               <button
-                onClick={() => setShowOnboarding(true)}
+                onClick={() => setShowLanding(true)}
                 style={{
                   alignSelf: 'flex-start',
                   padding: '8px 18px',
@@ -1858,13 +1858,15 @@ export default function SettingsPage() {
                   <line x1="12" y1="8" x2="12" y2="12" />
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
-                Ver tutorial de inicio
+                Ver presentación del producto
               </button>
             </div>
           </Section>
         </div>
       </div>
-      {showOnboarding && <OnboardingModal onClose={() => setShowOnboarding(false)} />}
+      {showLanding && (
+        <LandingPage onEnter={() => setShowLanding(false)} onClose={() => setShowLanding(false)} />
+      )}
     </>
   )
 }

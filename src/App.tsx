@@ -7,7 +7,7 @@ import { hydrateAttachments } from '@/store/slices/notesSlice'
 import { loadAllAttachmentBlobs, saveAttachmentBlob } from '@/lib/attachmentsDb'
 import InstallPrompt from '@/components/pwa/InstallPrompt'
 import LockScreen, { touchActivity, getLastActivity } from '@/components/security/LockScreen'
-import OnboardingModal from '@/components/onboarding/OnboardingModal'
+import LandingPage from '@/pages/landing/LandingPage'
 
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll']
 
@@ -19,9 +19,7 @@ function AppInner() {
   const lockTimeoutMinutes = useAppSelector(s => s.settings.lockTimeoutMinutes)
   const lockOnHide = useAppSelector(s => s.settings.lockOnHide)
 
-  const [showOnboarding, setShowOnboarding] = useState(
-    () => !localStorage.getItem('agilens_onboarded')
-  )
+  const [showLanding, setShowLanding] = useState(() => !localStorage.getItem('agilens_onboarded'))
 
   const [locked, setLocked] = useState(() => {
     if (!lockEnabled || !lockPasswordHash) return false
@@ -110,19 +108,18 @@ function AppInner() {
     )
   }
 
-  return (
-    <>
-      <RouterProvider router={router} />
-      {showOnboarding && (
-        <OnboardingModal
-          onClose={() => {
-            localStorage.setItem('agilens_onboarded', '1')
-            setShowOnboarding(false)
-          }}
-        />
-      )}
-    </>
-  )
+  if (showLanding) {
+    return (
+      <LandingPage
+        onEnter={() => {
+          localStorage.setItem('agilens_onboarded', '1')
+          setShowLanding(false)
+        }}
+      />
+    )
+  }
+
+  return <RouterProvider router={router} />
 }
 
 export default function App() {
