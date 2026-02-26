@@ -89,7 +89,30 @@ function buildMarkdown(entry: DailyEntry, notes: Note[], sprint?: Sprint): strin
     .map(id => notes.find(n => n.id === id))
     .filter((n): n is Note => !!n)
   if (linkedNotes.length) {
-    lines.push('## Evidencias', '', ...linkedNotes.map(n => `- [[${n.title}]]`), '')
+    const TYPE_MD_LABEL: Record<string, string> = {
+      task: 'Tareas',
+      research: 'Investigacion',
+      meeting: 'Reuniones',
+      evidence: 'Evidencias',
+      note: 'Notas',
+      technical: 'Tecnicas',
+      sprint: 'Sprint notas',
+      daily: 'Daily',
+    }
+    const byType: Record<string, Note[]> = {}
+    for (const n of linkedNotes) {
+      const t = n.noteType ?? 'note'
+      if (!byType[t]) byType[t] = []
+      byType[t].push(n)
+    }
+    for (const [type, tNotes] of Object.entries(byType)) {
+      lines.push(
+        `## ${TYPE_MD_LABEL[type] ?? type}`,
+        '',
+        ...tNotes.map(n => `- [[${n.title}]]`),
+        ''
+      )
+    }
   }
   return lines.join('\n')
 }
@@ -210,6 +233,39 @@ const SECTIONS: {
     color: '#fbbf24',
     optional: true,
   },
+]
+
+// ─── Linked note type meta ──────────────────────────────────────────────────
+
+const LINKED_TYPE_META: Record<string, { label: string; color: string }> = {
+  task: { label: 'Tarea', color: '#facc15' },
+  research: { label: 'Investigación', color: '#22d3ee' },
+  meeting: { label: 'Reunión', color: '#fb923c' },
+  evidence: { label: 'Evidencia', color: '#a78bfa' },
+  note: { label: 'Nota', color: '#94a3b8' },
+  technical: { label: 'Técnica', color: '#34d399' },
+  sprint: { label: 'Sprint', color: '#f472b6' },
+  daily: { label: 'Daily', color: '#60a5fa' },
+}
+
+const LINKED_TYPE_FILTERS: { value: string; label: string; color: string }[] = [
+  { value: 'all', label: 'Todas', color: 'var(--accent-400)' },
+  { value: 'task', label: 'Tareas', color: '#facc15' },
+  { value: 'research', label: 'Investigación', color: '#22d3ee' },
+  { value: 'meeting', label: 'Reuniones', color: '#fb923c' },
+  { value: 'evidence', label: 'Evidencias', color: '#a78bfa' },
+  { value: 'note', label: 'Notas', color: '#94a3b8' },
+  { value: 'technical', label: 'Técnicas', color: '#34d399' },
+]
+
+const LINKABLE_NOTE_TYPES = [
+  'task',
+  'research',
+  'meeting',
+  'evidence',
+  'note',
+  'technical',
+  'sprint',
 ]
 
 // ─── Item row ────────────────────────────────────────────────────────────────
@@ -557,8 +613,9 @@ export default function DailyPage() {
   const [editSprintId, setEditSprintId] = useState<string | null>(null)
   const [editSprintGoal, setEditSprintGoal] = useState('')
   const [savedFlash, setSavedFlash] = useState(false)
-  const [noteSearch, setNoteSearch] = useState('')
-  const [showEvidences, setShowEvidences] = useState(false)
+  const [showLinkedNotes, setShowLinkedNotes] = useState(false)
+  const [linkedNoteSearch, setLinkedNoteSearch] = useState('')
+  const [linkedNoteTypeFilter, setLinkedNoteTypeFilter] = useState<string>('all')
   const [showProjects, setShowProjects] = useState(true)
   const [hiddenOptional, setHiddenOptional] = useState<Set<SectionKey>>(
     new Set(['highlights'] as SectionKey[])
@@ -733,15 +790,19 @@ export default function DailyPage() {
     setTimeout(() => navigate('/editor'), 120)
   }, [entry, notes, activeSprint, sprints, dispatch, navigate])
 
-  // Evidencias: solo notas de tipo 'evidence'
-  const evidenceNotes = notes.filter(n => n.noteType === 'evidence')
-  const filteredEvidences = noteSearch.trim()
-    ? evidenceNotes.filter(
+  // Notas vinculables: task, research, meeting, evidence, note, technical, sprint
+  const linkableNotes = notes.filter(n => LINKABLE_NOTE_TYPES.includes(n.noteType))
+  const baseLinkedNotes =
+    linkedNoteTypeFilter === 'all'
+      ? linkableNotes
+      : linkableNotes.filter(n => n.noteType === linkedNoteTypeFilter)
+  const filteredLinkedNotes = linkedNoteSearch.trim()
+    ? baseLinkedNotes.filter(
         n =>
-          n.title.toLowerCase().includes(noteSearch.toLowerCase()) ||
-          n.tags.some(t => t.includes(noteSearch.toLowerCase()))
+          n.title.toLowerCase().includes(linkedNoteSearch.toLowerCase()) ||
+          n.tags.some(t => t.toLowerCase().includes(linkedNoteSearch.toLowerCase()))
       )
-    : evidenceNotes
+    : baseLinkedNotes
 
   // Preview en tiempo real del markdown que se generará
   const previewMarkdown = buildMarkdown(
@@ -1217,7 +1278,7 @@ export default function DailyPage() {
             />
           </div>
 
-          {/* Evidencias */}
+          {/* Notas vinculadas */}
           <div style={card}>
             <div
               style={{
@@ -1227,13 +1288,13 @@ export default function DailyPage() {
                 cursor: 'pointer',
                 userSelect: 'none',
               }}
-              onClick={() => setShowEvidences(v => !v)}
+              onClick={() => setShowLinkedNotes(v => !v)}
             >
               <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-2)' }}>
                 <IcoLink />
               </span>
               <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-0)', flex: 1 }}>
-                Evidencias
+                Notas vinculadas
               </span>
               {(entry?.noteIds.length ?? 0) > 0 && (
                 <span
@@ -1247,47 +1308,220 @@ export default function DailyPage() {
                   {entry!.noteIds.length}
                 </span>
               )}
+              <span style={{ fontSize: '10px', color: 'var(--text-3)', marginRight: '2px' }}>
+                tareas · investigación · reuniones · evidencias
+              </span>
               <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-3)' }}>
-                {showEvidences ? <IcoChevronUp /> : <IcoChevronDown />}
+                {showLinkedNotes ? <IcoChevronUp /> : <IcoChevronDown />}
               </span>
             </div>
 
-            {showEvidences && (
+            {/* Pills de notas ya vinculadas (siempre visibles si hay) */}
+            {(entry?.noteIds.length ?? 0) > 0 && !showLinkedNotes && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
+                {entry!.noteIds.map(nid => {
+                  const n = notes.find(x => x.id === nid)
+                  if (!n) return null
+                  const meta = LINKED_TYPE_META[n.noteType] ?? LINKED_TYPE_META.note
+                  return (
+                    <span
+                      key={nid}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '2px 7px',
+                        borderRadius: '99px',
+                        background: meta.color + '18',
+                        border: `1px solid ${meta.color}33`,
+                        color: meta.color,
+                        fontSize: '11px',
+                        fontWeight: 500,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '2px',
+                          background: meta.color,
+                          flexShrink: 0,
+                        }}
+                      />
+                      {n.title.length > 30 ? n.title.slice(0, 30) + '…' : n.title}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+
+            {showLinkedNotes && (
               <div
                 style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}
               >
+                {/* Filtros por tipo */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {LINKED_TYPE_FILTERS.map(f => {
+                    const count =
+                      f.value === 'all'
+                        ? linkableNotes.length
+                        : linkableNotes.filter(n => n.noteType === f.value).length
+                    const active = linkedNoteTypeFilter === f.value
+                    return (
+                      <button
+                        key={f.value}
+                        onClick={() => setLinkedNoteTypeFilter(f.value)}
+                        style={{
+                          padding: '2px 9px',
+                          borderRadius: '99px',
+                          border: '1px solid',
+                          borderColor: active ? f.color : 'var(--border-2)',
+                          background: active ? f.color + '18' : 'transparent',
+                          color: active ? f.color : 'var(--text-2)',
+                          fontSize: '11px',
+                          fontWeight: active ? 600 : 400,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        {f.label}
+                        <span style={{ opacity: 0.65, fontFamily: 'var(--font-mono)' }}>
+                          {count}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Búsqueda */}
                 <input
                   type="text"
-                  placeholder="Buscar evidencia..."
-                  value={noteSearch}
-                  onChange={e => setNoteSearch(e.target.value)}
+                  placeholder="Buscar por título o etiqueta..."
+                  value={linkedNoteSearch}
+                  onChange={e => setLinkedNoteSearch(e.target.value)}
                   className="input-base"
                   style={{ fontSize: '12px' }}
                 />
+
+                {/* Lista */}
                 <div
                   style={{
-                    maxHeight: '220px',
+                    maxHeight: '280px',
                     overflowY: 'auto',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '3px',
                   }}
                 >
-                  {filteredEvidences.length === 0 && (
+                  {filteredLinkedNotes.length === 0 && (
                     <p style={{ fontSize: '12px', color: 'var(--text-3)', margin: 0 }}>
-                      {evidenceNotes.length === 0
-                        ? 'Sin notas de evidencia. Crea una nota de tipo Evidencia.'
+                      {linkableNotes.length === 0
+                        ? 'Sin notas disponibles. Crea tareas, investigaciones o reuniones.'
                         : 'Sin resultados.'}
                     </p>
                   )}
-                  {filteredEvidences.map(note => (
-                    <NoteCheckRow
-                      key={note.id}
-                      note={note}
-                      checked={entry?.noteIds.includes(note.id) ?? false}
-                      onChange={() => toggleNote(note.id)}
-                    />
-                  ))}
+                  {filteredLinkedNotes.map(note => {
+                    const meta = LINKED_TYPE_META[note.noteType] ?? LINKED_TYPE_META.note
+                    const isLinked = entry?.noteIds.includes(note.id) ?? false
+                    return (
+                      <div
+                        key={note.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '6px 10px',
+                          borderRadius: 'var(--radius-md)',
+                          background: isLinked ? 'var(--accent-glow)' : 'var(--bg-1)',
+                          border: `1px solid ${isLinked ? 'var(--accent-600)' : 'var(--border-1)'}`,
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isLinked}
+                          onChange={() => toggleNote(note.id)}
+                          style={{ accentColor: meta.color, flexShrink: 0 }}
+                        />
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '1px 6px',
+                            borderRadius: '99px',
+                            background: meta.color + '20',
+                            color: meta.color,
+                            fontSize: '10px',
+                            fontWeight: 600,
+                            flexShrink: 0,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {meta.label}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '12px',
+                            color: 'var(--text-0)',
+                            flex: 1,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {note.title}
+                        </span>
+                        {note.tags.length > 0 && (
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              color: 'var(--text-3)',
+                              fontFamily: 'var(--font-mono)',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {note.tags.slice(0, 2).join(', ')}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => {
+                            dispatch(setActiveNoteId(note.id))
+                            navigate('/editor')
+                          }}
+                          title="Abrir nota en editor"
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'var(--text-3)',
+                            padding: '2px 4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            flexShrink: 0,
+                            transition: 'color 0.15s',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent-400)')}
+                          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-3)')}
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                            <polyline points="15 3 21 3 21 9" />
+                            <line x1="10" y1="14" x2="21" y2="3" />
+                          </svg>
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
