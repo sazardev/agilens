@@ -426,6 +426,933 @@ const ScrollArrow = () => (
   </motion.div>
 )
 
+// ─── Demo tab type ──────────────────────────────────────────────────────────
+
+type DemoTab = 'editor' | 'kanban' | 'sprints' | 'daily'
+
+// ─── EditorDemo ──────────────────────────────────────────────────────────────
+
+function EditorDemo({
+  mdValue,
+  setMdValue,
+  previewHtml,
+  accentHex,
+}: {
+  mdValue: string
+  setMdValue: (v: string) => void
+  previewHtml: string
+  accentHex: string
+}) {
+  const NOTES = [
+    { title: 'Sprint 14 — Auth System', type: 'sprint', active: true },
+    { title: 'Implementar JWT tokens', type: 'task', active: false },
+    { title: 'Daily 26 Feb', type: 'daily', active: false },
+    { title: 'Setup CI/CD pipeline', type: 'technical', active: false },
+    { title: 'Reunión de planificación', type: 'meeting', active: false },
+  ]
+  const TYPE_COLORS: Record<string, string> = {
+    sprint: '#f472b6',
+    task: '#facc15',
+    daily: '#60a5fa',
+    technical: '#34d399',
+    meeting: '#fb923c',
+  }
+  return (
+    <motion.div
+      key="editor"
+      initial={{ opacity: 0, x: -16 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 16 }}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+      style={{ display: 'flex', height: '100%' }}
+    >
+      {/* Note list sidebar */}
+      <div
+        style={{
+          width: '200px',
+          borderRight: '1px solid var(--border-1)',
+          background: 'var(--bg-2)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ padding: '10px 10px 6px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'var(--bg-1)',
+              border: '1px solid var(--border-1)',
+              borderRadius: '7px',
+              padding: '5px 8px',
+            }}
+          >
+            <svg
+              width="11"
+              height="11"
+              fill="none"
+              stroke="var(--text-3)"
+              strokeWidth="2.5"
+              viewBox="0 0 24 24"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>Buscar notas...</span>
+          </div>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: '4px 6px' }}>
+          {NOTES.map(n => (
+            <div
+              key={n.title}
+              style={{
+                padding: '7px 8px',
+                borderRadius: '7px',
+                background: n.active ? `${accentHex}16` : 'transparent',
+                border: `1px solid ${n.active ? accentHex + '40' : 'transparent'}`,
+                marginBottom: '2px',
+                cursor: 'default',
+                transition: 'all 0.15s',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  marginBottom: '3px',
+                }}
+              >
+                <div
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: TYPE_COLORS[n.type],
+                    flexShrink: 0,
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: '9px',
+                    color: 'var(--text-3)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  {n.type}
+                </span>
+              </div>
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: n.active ? 'var(--text-0)' : 'var(--text-1)',
+                  fontWeight: n.active ? 600 : 400,
+                  lineHeight: 1.3,
+                }}
+              >
+                {n.title}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Editor + Preview */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          minWidth: 0,
+        }}
+      >
+        {/* Toolbar */}
+        <div
+          style={{
+            padding: '5px 12px',
+            borderBottom: '1px solid var(--border-1)',
+            background: 'var(--bg-2)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+          }}
+        >
+          {['B', 'I', 'H1', 'H2', '—', '{ }', '☑'].map(t => (
+            <button
+              key={t}
+              style={{
+                padding: '3px 6px',
+                borderRadius: '4px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-2)',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'var(--font-ui)',
+              }}
+            >
+              {t}
+            </button>
+          ))}
+          <div style={{ flex: 1 }} />
+          <span
+            style={{
+              fontSize: '10px',
+              background: `${accentHex}18`,
+              border: `1px solid ${accentHex}30`,
+              borderRadius: '4px',
+              padding: '2px 8px',
+              color: accentHex,
+              transition: 'all 0.4s',
+            }}
+          >
+            Vista dividida
+          </span>
+        </div>
+        {/* Split pane */}
+        <div
+          style={{
+            flex: 1,
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            overflow: 'hidden',
+          }}
+        >
+          <textarea
+            value={mdValue}
+            onChange={e => setMdValue(e.target.value)}
+            spellCheck={false}
+            placeholder="Escribe Markdown aquí..."
+            style={{
+              padding: '16px',
+              border: 'none',
+              borderRight: '1px solid var(--border-1)',
+              background: 'var(--bg-1)',
+              color: 'var(--text-0)',
+              fontFamily: 'var(--font-editor, monospace)',
+              fontSize: '12.5px',
+              resize: 'none',
+              outline: 'none',
+              lineHeight: 1.7,
+            }}
+          />
+          <div
+            style={{
+              padding: '16px',
+              fontSize: '13px',
+              lineHeight: 1.8,
+              overflow: 'auto',
+              color: 'var(--text-0)',
+              background: 'var(--bg-1)',
+            }}
+            dangerouslySetInnerHTML={{ __html: previewHtml }}
+          />
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── KanbanDemo ───────────────────────────────────────────────────────────────
+
+function KanbanDemo({ accentHex }: { accentHex: string }) {
+  const COLS: {
+    id: string
+    label: string
+    color: string
+    cards: { title: string; pts: number; tag: string; active?: boolean }[]
+  }[] = [
+    {
+      id: 'backlog',
+      label: 'Backlog',
+      color: '#64748b',
+      cards: [
+        { title: 'Pipeline de CI/CD', pts: 5, tag: 'devops' },
+        { title: 'Documentar API REST', pts: 3, tag: 'docs' },
+      ],
+    },
+    {
+      id: 'todo',
+      label: 'Por hacer',
+      color: '#94a3b8',
+      cards: [
+        { title: 'Setup ESLint + Prettier', pts: 2, tag: 'config' },
+        { title: 'Rate limiting', pts: 3, tag: 'security' },
+      ],
+    },
+    {
+      id: 'in-progress',
+      label: 'En progreso',
+      color: '#f59e0b',
+      cards: [
+        { title: 'Autenticación JWT', pts: 8, tag: 'auth', active: true },
+        { title: 'Middleware de roles', pts: 5, tag: 'auth' },
+      ],
+    },
+    {
+      id: 'review',
+      label: 'Revisión',
+      color: '#818cf8',
+      cards: [{ title: 'Tests de integración', pts: 5, tag: 'testing' }],
+    },
+    {
+      id: 'done',
+      label: 'Listo',
+      color: '#10b981',
+      cards: [
+        { title: 'Modelo de usuario', pts: 5, tag: 'db' },
+        { title: 'Schema PostgreSQL', pts: 3, tag: 'db' },
+      ],
+    },
+  ]
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -16 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 16 }}
+      transition={{ duration: 0.22 }}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+    >
+      <div
+        style={{
+          padding: '8px 16px',
+          borderBottom: '1px solid var(--border-1)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          background: 'var(--bg-2)',
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-0)' }}>
+          Sprint 14 · Auth System
+        </span>
+        <span
+          style={{
+            fontSize: '10px',
+            padding: '2px 8px',
+            borderRadius: '20px',
+            background: `${accentHex}20`,
+            color: accentHex,
+            fontWeight: 700,
+            transition: 'all 0.4s',
+          }}
+        >
+          Activo
+        </span>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: '10px', color: 'var(--text-3)' }}>7 pts · 2 en progreso</span>
+      </div>
+      <div
+        style={{
+          flex: 1,
+          overflow: 'auto',
+          padding: '14px',
+          display: 'flex',
+          gap: '10px',
+          alignItems: 'flex-start',
+        }}
+      >
+        {COLS.map(col => (
+          <div
+            key={col.id}
+            style={{
+              flex: '0 0 155px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                marginBottom: '4px',
+              }}
+            >
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: col.color }} />
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: 'var(--text-2)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                {col.label}
+              </span>
+              <span
+                style={{
+                  marginLeft: 'auto',
+                  fontSize: '10px',
+                  color: 'var(--text-3)',
+                  background: 'var(--bg-1)',
+                  borderRadius: '10px',
+                  padding: '0 5px',
+                  lineHeight: '16px',
+                }}
+              >
+                {col.cards.length}
+              </span>
+            </div>
+            {col.cards.map(card => (
+              <div
+                key={card.title}
+                style={{
+                  padding: '9px 10px',
+                  borderRadius: '8px',
+                  background: 'var(--bg-2)',
+                  border: `1px solid ${card.active ? accentHex + '55' : 'var(--border-1)'}`,
+                  fontSize: '11px',
+                  color: 'var(--text-1)',
+                  lineHeight: 1.4,
+                  cursor: 'default',
+                  transition: 'border-color 0.4s',
+                }}
+              >
+                <div
+                  style={{
+                    marginBottom: '7px',
+                    fontWeight: 500,
+                    color: 'var(--text-0)',
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {card.title}
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: '9px',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      background: 'var(--bg-1)',
+                      color: 'var(--text-3)',
+                    }}
+                  >
+                    {card.tag}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: accentHex,
+                      transition: 'color 0.4s',
+                    }}
+                  >
+                    {card.pts}pts
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── SprintsDemo ──────────────────────────────────────────────────────────────
+
+function SprintsDemo({ sprintProgress, accentHex }: { sprintProgress: number; accentHex: string }) {
+  const TASKS: { title: string; status: string; pts: number; who: string }[] = [
+    { title: 'Implementar JWT tokens', status: 'done', pts: 8, who: 'TÚ' },
+    { title: 'Middleware de autenticación', status: 'in-progress', pts: 5, who: 'TÚ' },
+    { title: 'Refresh token endpoint', status: 'in-progress', pts: 3, who: 'SR' },
+    { title: 'Rate limiting por IP', status: 'todo', pts: 3, who: 'NG' },
+    { title: 'Documentar endpoints', status: 'todo', pts: 2, who: 'SR' },
+    { title: 'Tests de integración', status: 'review', pts: 5, who: 'TÚ' },
+  ]
+  const STATUS_META: Record<string, { color: string; label: string }> = {
+    done: { color: '#10b981', label: 'Listo' },
+    'in-progress': { color: '#f59e0b', label: 'En progreso' },
+    todo: { color: '#94a3b8', label: 'Por hacer' },
+    review: { color: '#818cf8', label: 'Revisión' },
+  }
+  const BARS = [3, 5, 4, 7, 6, 8, 5]
+  const maxBar = Math.max(...BARS)
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -16 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 16 }}
+      transition={{ duration: 0.22 }}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+    >
+      {/* Sprint header */}
+      <div
+        style={{
+          padding: '10px 20px',
+          borderBottom: '1px solid var(--border-1)',
+          background: 'var(--bg-2)',
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+          }}
+        >
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '3px',
+              }}
+            >
+              <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-0)' }}>
+                Sprint 14 — Auth System
+              </span>
+              <span
+                style={{
+                  fontSize: '10px',
+                  padding: '2px 8px',
+                  borderRadius: '20px',
+                  background: `${accentHex}20`,
+                  color: accentHex,
+                  fontWeight: 700,
+                  transition: 'all 0.4s',
+                }}
+              >
+                Activo
+              </span>
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-3)' }}>
+              26 Feb → 14 Mar · 7 días restantes · 26 pts totales
+            </div>
+          </div>
+        </div>
+        <div style={{ marginTop: '8px' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '10px',
+              color: 'var(--text-3)',
+              marginBottom: '4px',
+            }}
+          >
+            <span>Progreso</span>
+            <span style={{ color: accentHex, fontWeight: 700, transition: 'color 0.4s' }}>
+              {sprintProgress}%
+            </span>
+          </div>
+          <div
+            style={{
+              height: '5px',
+              borderRadius: '3px',
+              background: 'var(--bg-1)',
+              overflow: 'hidden',
+            }}
+          >
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${sprintProgress}%` }}
+              transition={{ duration: 1.4, ease: 'easeOut' }}
+              style={{
+                height: '100%',
+                borderRadius: '3px',
+                background: accentHex,
+                transition: 'background 0.4s',
+              }}
+            />
+          </div>
+        </div>
+      </div>
+      {/* Content */}
+      <div
+        style={{
+          flex: 1,
+          overflow: 'hidden',
+          display: 'grid',
+          gridTemplateColumns: '1fr 240px',
+        }}
+      >
+        {/* Task list */}
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRight: '1px solid var(--border-1)',
+            overflow: 'auto',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              color: 'var(--text-3)',
+              marginBottom: '8px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.07em',
+            }}
+          >
+            Backlog del sprint
+          </div>
+          {TASKS.map(task => (
+            <div
+              key={task.title}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '7px 9px',
+                borderRadius: '7px',
+                background: 'var(--bg-2)',
+                border: '1px solid var(--border-1)',
+                marginBottom: '5px',
+              }}
+            >
+              <div
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  background: STATUS_META[task.status].color,
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ flex: 1, fontSize: '11px', color: 'var(--text-0)' }}>
+                {task.title}
+              </span>
+              <span
+                style={{
+                  fontSize: '9px',
+                  color: 'var(--text-3)',
+                  background: 'var(--bg-1)',
+                  borderRadius: '4px',
+                  padding: '1px 5px',
+                }}
+              >
+                {task.who}
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: accentHex,
+                  transition: 'color 0.4s',
+                  minWidth: '22px',
+                  textAlign: 'right',
+                }}
+              >
+                {task.pts}
+              </span>
+            </div>
+          ))}
+        </div>
+        {/* Velocity + stats */}
+        <div style={{ padding: '12px 14px', overflow: 'auto' }}>
+          <div
+            style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              color: 'var(--text-3)',
+              marginBottom: '10px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.07em',
+            }}
+          >
+            Velocidad
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-end',
+              gap: '5px',
+              height: '70px',
+              marginBottom: '4px',
+            }}
+          >
+            {BARS.map((h, i) => (
+              <motion.div
+                key={i}
+                initial={{ scaleY: 0 }}
+                animate={{ scaleY: 1 }}
+                transition={{ duration: 0.5, delay: i * 0.07, ease: 'easeOut' }}
+                style={{
+                  flex: 1,
+                  height: `${(h / maxBar) * 100}%`,
+                  borderRadius: '3px 3px 0 0',
+                  background:
+                    i === BARS.length - 1 ? accentHex : 'var(--border-2, rgba(255,255,255,0.1))',
+                  transition: 'background 0.4s',
+                  transformOrigin: 'bottom',
+                }}
+              />
+            ))}
+          </div>
+          <div
+            style={{
+              fontSize: '9px',
+              color: 'var(--text-3)',
+              textAlign: 'center',
+              marginBottom: '12px',
+            }}
+          >
+            Últimos 7 sprints
+          </div>
+          {[
+            { l: '8 pts', d: 'Completados' },
+            { l: '4 pts', d: 'Restantes' },
+            { l: '2', d: 'Impedimentos' },
+          ].map(s => (
+            <div
+              key={s.d}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                padding: '6px 8px',
+                borderRadius: '6px',
+                background: 'var(--bg-2)',
+                border: '1px solid var(--border-1)',
+                marginBottom: '5px',
+              }}
+            >
+              <span style={{ fontSize: '10px', color: 'var(--text-2)' }}>{s.d}</span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: accentHex,
+                  transition: 'color 0.4s',
+                }}
+              >
+                {s.l}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── DailyDemo ────────────────────────────────────────────────────────────────
+
+function DailyDemo({ accentHex }: { accentHex: string }) {
+  const [ayer, setAyer] = useState(
+    'Terminé el endpoint de login y configuré el middleware de cors.'
+  )
+  const [hoy, setHoy] = useState('Revisar el PR de autenticación JWT y agregar tests unitarios.')
+  const [bloqueo, setBloqueo] = useState('Esperando los certificados SSL del hosting.')
+  const HISTORY = [
+    { date: '25 Feb', ok: true, blocker: false },
+    { date: '24 Feb', ok: true, blocker: true },
+    { date: '21 Feb', ok: true, blocker: false },
+    { date: '20 Feb', ok: true, blocker: false },
+    { date: '19 Feb', ok: false, blocker: false },
+  ]
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -16 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 16 }}
+      transition={{ duration: 0.22 }}
+      style={{ height: '100%', display: 'flex', overflow: 'hidden' }}
+    >
+      {/* Entry form */}
+      <div
+        style={{
+          flex: 1,
+          borderRight: '1px solid var(--border-1)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '10px 16px',
+            borderBottom: '1px solid var(--border-1)',
+            background: 'var(--bg-2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: '12px', fontWeight: 700 }}>Daily Standup — Hoy, 26 Feb</span>
+          <span
+            style={{
+              fontSize: '10px',
+              padding: '2px 8px',
+              borderRadius: '20px',
+              background: `${accentHex}20`,
+              color: accentHex,
+              fontWeight: 700,
+              transition: 'all 0.4s',
+            }}
+          >
+            Sprint-14
+          </span>
+        </div>
+        <div
+          style={{
+            flex: 1,
+            overflow: 'auto',
+            padding: '14px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px',
+          }}
+        >
+          {(
+            [
+              { label: '¿Qué hice ayer?', color: '#10b981', value: ayer, setter: setAyer },
+              { label: '¿Qué haré hoy?', color: accentHex, value: hoy, setter: setHoy },
+              {
+                label: '¿Tengo algún bloqueo?',
+                color: '#ef4444',
+                value: bloqueo,
+                setter: setBloqueo,
+              },
+            ] as {
+              label: string
+              color: string
+              value: string
+              setter: (v: string) => void
+            }[]
+          ).map(({ label, color, value, setter }) => (
+            <div key={label}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  marginBottom: '5px',
+                }}
+              >
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
+                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-2)' }}>
+                  {label}
+                </span>
+              </div>
+              <textarea
+                value={value}
+                onChange={e => setter(e.target.value)}
+                rows={2}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-1)',
+                  background: 'var(--bg-1)',
+                  color: 'var(--text-0)',
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: '12px',
+                  lineHeight: 1.5,
+                  resize: 'none',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  transition: 'border-color 0.15s',
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* History */}
+      <div
+        style={{
+          width: '160px',
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '10px 12px',
+            borderBottom: '1px solid var(--border-1)',
+            background: 'var(--bg-2)',
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-2)' }}>
+            Historial
+          </span>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
+          {HISTORY.map(h => (
+            <div
+              key={h.date}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 8px',
+                borderRadius: '7px',
+                background: 'var(--bg-2)',
+                border: '1px solid var(--border-1)',
+                marginBottom: '4px',
+              }}
+            >
+              <svg
+                width="9"
+                height="9"
+                fill="none"
+                stroke={h.ok ? '#10b981' : '#ef4444'}
+                strokeWidth="2.5"
+                viewBox="0 0 24 24"
+              >
+                {h.ok ? (
+                  <polyline points="20 6 9 17 4 12" />
+                ) : (
+                  <>
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </>
+                )}
+              </svg>
+              <span style={{ fontSize: '10px', color: 'var(--text-1)', flex: 1 }}>{h.date}</span>
+              {h.blocker && (
+                <div
+                  style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }}
+                  title="Tenía bloqueo"
+                />
+              )}
+            </div>
+          ))}
+          <div style={{ padding: '10px 8px', textAlign: 'center' }}>
+            <div
+              style={{
+                fontSize: '22px',
+                fontWeight: 900,
+                color: accentHex,
+                transition: 'color 0.4s',
+                lineHeight: 1,
+              }}
+            >
+              14
+            </div>
+            <div style={{ fontSize: '9px', color: 'var(--text-3)', marginTop: '3px' }}>
+              días consecutivos
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function LandingPage({ onEnter, onClose }: Props) {
@@ -435,6 +1362,7 @@ export default function LandingPage({ onEnter, onClose }: Props) {
     `# Mi primera nota\n\nHoy trabajé en **autenticación** y revisé las *issues* abiertas.\n\n## Tareas\n- Implementar JWT\n- Agregar tests\n- Revisar \`auth.ts\``
   )
   const [sprintProgress] = useState(67)
+  const [activeDemo, setActiveDemo] = useState<DemoTab>('editor')
   const [showInstallHint, setShowInstallHint] = useState(false)
   const featuresRef = useRef<HTMLDivElement>(null)
   const ctaRef = useRef<HTMLDivElement>(null)
@@ -819,21 +1747,21 @@ export default function LandingPage({ onEnter, onClose }: Props) {
 
         {/* Quick stats bar */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.6 }}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.6, ease: 'easeOut' }}
           style={{
             display: 'flex',
-            gap: 'clamp(16px, 4vw, 40px)',
+            gap: 'clamp(20px, 5vw, 56px)',
             flexWrap: 'wrap',
             justifyContent: 'center',
-            padding: '16px 24px',
-            borderRadius: '12px',
+            padding: '20px 32px',
+            borderRadius: '14px',
             background: 'var(--bg-2)',
             border: '1px solid var(--border-1)',
             fontSize: '13px',
             color: 'var(--text-2)',
-            marginBottom: '32px',
+            marginBottom: '40px',
           }}
         >
           {[
@@ -841,21 +1769,28 @@ export default function LandingPage({ onEnter, onClose }: Props) {
             { val: '0', label: 'Servidores necesarios' },
             { val: '100%', label: 'Open Source' },
             { val: '∞', label: 'Notas sin límite' },
-          ].map(({ val, label }) => (
-            <div key={label} style={{ textAlign: 'center' }}>
+          ].map(({ val, label }, i) => (
+            <motion.div
+              key={label}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.7 + i * 0.08, ease: 'easeOut' }}
+              style={{ textAlign: 'center' }}
+            >
               <div
                 style={{
-                  fontSize: 'clamp(18px,3vw,26px)',
-                  fontWeight: 800,
+                  fontSize: 'clamp(20px,3.5vw,30px)',
+                  fontWeight: 900,
                   color: preset.accentHex,
                   transition: 'color 0.4s',
                   lineHeight: 1,
+                  letterSpacing: '-0.02em',
                 }}
               >
                 {val}
               </div>
-              <div style={{ fontSize: '11px', marginTop: '3px', opacity: 0.8 }}>{label}</div>
-            </div>
+              <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.75 }}>{label}</div>
+            </motion.div>
           ))}
         </motion.div>
 
@@ -868,542 +1803,781 @@ export default function LandingPage({ onEnter, onClose }: Props) {
       <section
         ref={featuresRef}
         style={{
-          padding: 'clamp(40px,8vh,80px) clamp(16px,4vw,60px)',
-          maxWidth: '1200px',
-          margin: '0 auto',
+          padding: 'clamp(80px,12vh,140px) clamp(16px,4vw,48px)',
+          background: 'var(--bg-2)',
+          borderTop: '1px solid var(--border-1)',
+          borderBottom: '1px solid var(--border-1)',
         }}
       >
-        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-          <h2
-            style={{
-              fontSize: 'clamp(22px,3.5vw,36px)',
-              fontWeight: 800,
-              margin: '0 0 10px',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            Experimenta el producto, ahora mismo
-          </h2>
-          <p
-            style={{
-              color: 'var(--text-2)',
-              fontSize: '15px',
-              maxWidth: '480px',
-              margin: '0 auto',
-            }}
-          >
-            No son screenshots. Son componentes reales del producto.
-          </p>
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '20px',
-          }}
-        >
-          {/* ── Demo 1: Editor Markdown ──────────────────────────────────── */}
+        <div style={{ maxWidth: '1300px', margin: '0 auto' }}>
           <motion.div
-            initial={{ opacity: 0, y: 24 }}
+            initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4 }}
-            style={{
-              borderRadius: '14px',
-              border: '1px solid var(--border-2)',
-              overflow: 'hidden',
-              background: 'var(--bg-2)',
-            }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            style={{ textAlign: 'center', marginBottom: '60px' }}
           >
-            {/* Tab bar */}
-            <div
+            <motion.span
+              initial={{ opacity: 0, scale: 0.85 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4, delay: 0.1 }}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 12px',
-                borderBottom: '1px solid var(--border-1)',
-                background: 'var(--bg-1)',
+                display: 'inline-block',
+                background: `${preset.accentHex}18`,
+                border: `1px solid ${preset.accentHex}45`,
+                color: preset.accentHex,
+                borderRadius: '20px',
+                padding: '4px 14px',
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase' as const,
+                marginBottom: '20px',
+                transition: 'all 0.4s',
               }}
             >
-              <div style={{ display: 'flex', gap: '5px' }}>
+              Producto real · no screenshots
+            </motion.span>
+            <h2
+              style={{
+                fontSize: 'clamp(34px,5vw,66px)',
+                fontWeight: 900,
+                margin: '0 0 18px',
+                letterSpacing: '-0.03em',
+                lineHeight: 1.05,
+              }}
+            >
+              Experimenta el producto,{' '}
+              <span style={{ color: preset.accentHex, transition: 'color 0.4s' }}>ahora mismo</span>
+            </h2>
+            <p
+              style={{
+                color: 'var(--text-2)',
+                fontSize: 'clamp(14px,1.6vw,17px)',
+                maxWidth: '520px',
+                margin: '0 auto',
+                lineHeight: 1.7,
+              }}
+            >
+              No son maquetas. Son los componentes reales del producto, corriendo en tu navegador en
+              este momento.
+            </p>
+          </motion.div>
+
+          {/* ── App window simulation ──────────────────────────────────────────── */}
+          <motion.div
+            initial={{ opacity: 0, y: 60, scale: 0.97 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            viewport={{ once: true, margin: '-40px' }}
+            transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              borderRadius: '16px',
+              border: '1px solid var(--border-2)',
+              overflow: 'hidden',
+              background: 'var(--bg-1)',
+              boxShadow: '0 40px 100px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)',
+            }}
+          >
+            {/* Window title bar */}
+            <div
+              style={{
+                padding: '12px 20px',
+                background: 'var(--bg-2)',
+                borderBottom: '1px solid var(--border-1)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '14px',
+              }}
+            >
+              <div style={{ display: 'flex', gap: '6px' }}>
                 {['#ff5f57', '#febc2e', '#28c840'].map(c => (
                   <div
                     key={c}
-                    style={{ width: 10, height: 10, borderRadius: '50%', background: c }}
+                    style={{ width: 12, height: 12, borderRadius: '50%', background: c }}
                   />
                 ))}
               </div>
-              <span style={{ fontSize: '11px', color: 'var(--text-3)', fontFamily: 'monospace' }}>
-                editor · mi-primera-nota.md
-              </span>
-            </div>
-            {/* Split editor/preview */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', height: '220px' }}>
-              <textarea
-                value={mdValue}
-                onChange={e => setMdValue(e.target.value)}
-                spellCheck={false}
-                style={{
-                  padding: '12px',
-                  border: 'none',
-                  borderRight: '1px solid var(--border-1)',
-                  background: 'var(--bg-1)',
-                  color: 'var(--text-0)',
-                  fontFamily: 'var(--font-editor, monospace)',
-                  fontSize: '12px',
-                  resize: 'none',
-                  outline: 'none',
-                  lineHeight: 1.6,
-                }}
-              />
-              <div
-                style={{
-                  padding: '12px',
-                  fontSize: '12px',
-                  lineHeight: 1.7,
-                  overflow: 'auto',
-                  color: 'var(--text-0)',
-                }}
-                dangerouslySetInnerHTML={{ __html: previewHtml }}
-              />
-            </div>
-            <div
-              style={{
-                padding: '8px 12px',
-                background: 'var(--bg-1)',
-                borderTop: '1px solid var(--border-1)',
-                fontSize: '10px',
-                color: 'var(--text-3)',
-                fontFamily: 'var(--font-ui)',
-              }}
-            >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                <svg
-                  width="11"
-                  height="11"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-                Editor Markdown interactivo — escribe algo arriba
-              </span>
-            </div>
-          </motion.div>
-
-          {/* ── Demo 2: Kanban ───────────────────────────────────────────── */}
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            style={{
-              borderRadius: '14px',
-              border: '1px solid var(--border-2)',
-              overflow: 'hidden',
-              background: 'var(--bg-2)',
-            }}
-          >
-            <div
-              style={{
-                padding: '10px 14px',
-                borderBottom: '1px solid var(--border-1)',
-                background: 'var(--bg-1)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <svg
-                width="13"
-                height="13"
-                fill="none"
-                stroke={preset.accentHex}
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-                style={{ transition: 'stroke 0.4s' }}
-              >
-                <rect x="3" y="3" width="7" height="7" />
-                <rect x="14" y="3" width="7" height="7" />
-                <rect x="14" y="14" width="7" height="7" />
-                <rect x="3" y="14" width="7" height="7" />
-              </svg>
-              <span
-                style={{ fontSize: '11px', color: 'var(--text-3)', fontFamily: 'var(--font-ui)' }}
-              >
-                kanban · sprint-14
-              </span>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                gap: '8px',
-                padding: '12px',
-                overflowX: 'auto',
-                height: '220px',
-              }}
-            >
-              {MINI_KANBAN.map(col => (
-                <div
-                  key={col.col}
-                  style={{
-                    flex: '0 0 150px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      marginBottom: '2px',
-                    }}
-                  >
-                    <div
-                      style={{ width: 7, height: 7, borderRadius: '50%', background: col.color }}
-                    />
-                    <span
-                      style={{
-                        fontSize: '10px',
-                        fontWeight: 700,
-                        color: 'var(--text-2)',
-                        fontFamily: 'var(--font-ui)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}
-                    >
-                      {col.col}
-                    </span>
-                  </div>
-                  {col.tasks.map(t => (
-                    <div
-                      key={t}
-                      style={{
-                        padding: '7px 9px',
-                        borderRadius: '7px',
-                        background: 'var(--bg-1)',
-                        border: '1px solid var(--border-1)',
-                        fontSize: '11px',
-                        color: 'var(--text-1)',
-                        lineHeight: 1.4,
-                        cursor: 'default',
-                        userSelect: 'none',
-                      }}
-                    >
-                      {t}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-            <div
-              style={{
-                padding: '8px 12px',
-                background: 'var(--bg-1)',
-                borderTop: '1px solid var(--border-1)',
-                fontSize: '10px',
-                color: 'var(--text-3)',
-              }}
-            >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                <svg
-                  width="11"
-                  height="11"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  viewBox="0 0 24 24"
-                >
-                  <rect x="3" y="3" width="7" height="7" />
-                  <rect x="14" y="3" width="7" height="7" />
-                  <rect x="14" y="14" width="7" height="7" />
-                  <rect x="3" y="14" width="7" height="7" />
-                </svg>
-                Kanban drag-and-drop · 5 columnas · prioridad visual
-              </span>
-            </div>
-          </motion.div>
-
-          {/* ── Demo 3: Sprint ───────────────────────────────────────────── */}
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-            style={{
-              borderRadius: '14px',
-              border: '1px solid var(--border-2)',
-              overflow: 'hidden',
-              background: 'var(--bg-2)',
-            }}
-          >
-            <div
-              style={{
-                padding: '10px 14px',
-                borderBottom: '1px solid var(--border-1)',
-                background: 'var(--bg-1)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <svg
-                width="13"
-                height="13"
-                fill="none"
-                stroke={preset.accentHex}
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-                style={{ transition: 'stroke 0.4s' }}
-              >
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-              </svg>
-              <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>
-                sprints · Sprint-14 · activo
-              </span>
-            </div>
-            <div
-              style={{
-                padding: '16px',
-                height: '220px',
-                overflow: 'auto',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '16px',
-              }}
-            >
-              {/* Sprint card */}
-              <div
-                style={{
-                  padding: '12px',
-                  borderRadius: '10px',
-                  background: 'var(--bg-1)',
-                  border: `1px solid ${preset.accentHex}40`,
-                  transition: 'border-color 0.4s',
-                }}
-              >
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
                 <div
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    marginBottom: '10px',
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: '13px', fontWeight: 700 }}>Sprint 14 — Auth System</div>
-                    <div style={{ fontSize: '10px', color: 'var(--text-3)', marginTop: '2px' }}>
-                      28 Feb → 14 Mar · 7 días restantes
-                    </div>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: '10px',
-                      padding: '2px 7px',
-                      borderRadius: '20px',
-                      background: `${preset.accentHex}20`,
-                      color: preset.accentHex,
-                      fontWeight: 700,
-                      transition: 'all 0.4s',
-                    }}
-                  >
-                    Activo
-                  </span>
-                </div>
-                {/* Progress bar */}
-                <div style={{ marginBottom: '8px' }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: '10px',
-                      color: 'var(--text-3)',
-                      marginBottom: '5px',
-                    }}
-                  >
-                    <span>Progreso</span>
-                    <span>{sprintProgress}%</span>
-                  </div>
-                  <div
-                    style={{
-                      height: '6px',
-                      borderRadius: '3px',
-                      background: 'var(--bg-3)',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <motion.div
-                      initial={{ width: 0 }}
-                      whileInView={{ width: `${sprintProgress}%` }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 1.2, delay: 0.4, ease: 'easeOut' }}
-                      style={{
-                        height: '100%',
-                        borderRadius: '3px',
-                        background: preset.accentHex,
-                        transition: 'background 0.4s',
-                      }}
-                    />
-                  </div>
-                </div>
-                {/* Stats */}
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  {[
-                    { l: '8 pts', d: 'Completados' },
-                    { l: '4 pts', d: 'Restantes' },
-                    { l: '2', d: 'Bloqueos' },
-                  ].map(s => (
-                    <div
-                      key={s.d}
-                      style={{
-                        flex: 1,
-                        textAlign: 'center',
-                        padding: '6px',
-                        borderRadius: '6px',
-                        background: 'var(--bg-2)',
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: '13px',
-                          fontWeight: 700,
-                          color: preset.accentHex,
-                          transition: 'color 0.4s',
-                        }}
-                      >
-                        {s.l}
-                      </div>
-                      <div style={{ fontSize: '9px', color: 'var(--text-3)', marginTop: '1px' }}>
-                        {s.d}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {/* Mini daily entry */}
-              <div
-                style={{
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  background: 'var(--bg-1)',
-                  border: '1px solid var(--border-1)',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: '10px',
-                    color: 'var(--text-3)',
-                    marginBottom: '5px',
+                    background: 'var(--bg-1)',
+                    border: '1px solid var(--border-1)',
+                    borderRadius: '8px',
+                    padding: '5px 20px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px',
+                    gap: '6px',
                   }}
                 >
                   <svg
                     width="10"
                     height="10"
                     fill="none"
-                    stroke="currentColor"
+                    stroke="var(--text-3)"
                     strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
                     viewBox="0 0 24 24"
                   >
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                    <line x1="16" y1="2" x2="16" y2="6" />
-                    <line x1="8" y1="2" x2="8" y2="6" />
-                    <line x1="3" y1="10" x2="21" y2="10" />
+                    <rect x="3" y="11" width="11" height="11" rx="1" />
+                    <path d="M7 11V7a5 5 0 0110 0v4" />
                   </svg>
-                  Daily · Hoy — 26 Feb
-                </div>
-                <div
-                  style={{
-                    fontSize: '11px',
-                    color: 'var(--text-1)',
-                    lineHeight: 1.7,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '3px',
-                  }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
-                    <svg
-                      width="10"
-                      height="10"
-                      fill="none"
-                      stroke="#10b981"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      viewBox="0 0 24 24"
-                      style={{ marginTop: '2px', flexShrink: 0 }}
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    Terminé el endpoint de login
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
-                    <svg
-                      width="10"
-                      height="10"
-                      fill="none"
-                      stroke="#f59e0b"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      viewBox="0 0 24 24"
-                      style={{ marginTop: '2px', flexShrink: 0 }}
-                    >
-                      <polyline points="1 4 1 10 7 10" />
-                      <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
-                    </svg>
-                    Revisando middleware JWT
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
-                    <svg
-                      width="10"
-                      height="10"
-                      fill="none"
-                      stroke="#ef4444"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      viewBox="0 0 24 24"
-                      style={{ marginTop: '2px', flexShrink: 0 }}
-                    >
-                      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                      <line x1="12" y1="9" x2="12" y2="13" />
-                      <line x1="12" y1="17" x2="12.01" y2="17" />
-                    </svg>
-                    Bloqueado por falta de certs SSL
+                  <span
+                    style={{ fontSize: '11px', color: 'var(--text-3)', fontFamily: 'monospace' }}
+                  >
+                    app.agilens.dev
                   </span>
                 </div>
               </div>
+              <AgilensLogo size={16} showWordmark variant="color" />
             </div>
+
+            {/* App body */}
+            <div style={{ display: 'flex', height: 'clamp(420px, 55vh, 540px)' }}>
+              {/* Mini sidebar nav */}
+              <div
+                style={{
+                  width: '52px',
+                  borderRight: '1px solid var(--border-1)',
+                  background: 'var(--bg-2)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  padding: '12px 0',
+                  gap: '4px',
+                  flexShrink: 0,
+                }}
+              >
+                <div style={{ marginBottom: '12px' }}>
+                  <AgilensLogo size={22} variant="color" />
+                </div>
+                {(
+                  [
+                    {
+                      tab: 'editor' as DemoTab,
+                      label: 'Notas',
+                      icon: (
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      ),
+                    },
+                    {
+                      tab: 'kanban' as DemoTab,
+                      label: 'Kanban',
+                      icon: (
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          viewBox="0 0 24 24"
+                        >
+                          <rect x="3" y="3" width="7" height="7" />
+                          <rect x="14" y="3" width="7" height="7" />
+                          <rect x="14" y="14" width="7" height="7" />
+                          <rect x="3" y="14" width="7" height="7" />
+                        </svg>
+                      ),
+                    },
+                    {
+                      tab: 'sprints' as DemoTab,
+                      label: 'Sprints',
+                      icon: (
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          viewBox="0 0 24 24"
+                        >
+                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                        </svg>
+                      ),
+                    },
+                    {
+                      tab: 'daily' as DemoTab,
+                      label: 'Daily',
+                      icon: (
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          viewBox="0 0 24 24"
+                        >
+                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                          <line x1="16" y1="2" x2="16" y2="6" />
+                          <line x1="8" y1="2" x2="8" y2="6" />
+                          <line x1="3" y1="10" x2="21" y2="10" />
+                        </svg>
+                      ),
+                    },
+                  ] as { tab: DemoTab; label: string; icon: React.ReactNode }[]
+                ).map(({ tab, label, icon }) => (
+                  <button
+                    key={tab}
+                    title={label}
+                    onClick={() => setActiveDemo(tab)}
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: activeDemo === tab ? `${preset.accentHex}22` : 'transparent',
+                      color: activeDemo === tab ? preset.accentHex : 'var(--text-3)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {icon}
+                  </button>
+                ))}
+              </div>
+
+              {/* Main content area */}
+              <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minWidth: 0 }}>
+                <AnimatePresence mode="wait">
+                  {activeDemo === 'editor' && (
+                    <EditorDemo
+                      key="editor"
+                      mdValue={mdValue}
+                      setMdValue={setMdValue}
+                      previewHtml={previewHtml}
+                      accentHex={preset.accentHex}
+                    />
+                  )}
+                  {activeDemo === 'kanban' && (
+                    <KanbanDemo key="kanban" accentHex={preset.accentHex} />
+                  )}
+                  {activeDemo === 'sprints' && (
+                    <SprintsDemo
+                      key="sprints"
+                      sprintProgress={sprintProgress}
+                      accentHex={preset.accentHex}
+                    />
+                  )}
+                  {activeDemo === 'daily' && <DailyDemo key="daily" accentHex={preset.accentHex} />}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* Status bar */}
             <div
               style={{
-                padding: '8px 12px',
-                background: 'var(--bg-1)',
-                borderTop: '1px solid var(--border-1)',
+                padding: '6px 20px',
+                background: preset.accentHex,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
                 fontSize: '10px',
-                color: 'var(--text-3)',
+                color: 'rgba(255,255,255,0.9)',
+                fontFamily: 'var(--font-ui)',
+                transition: 'background 0.4s',
               }}
             >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <svg
-                  width="11"
-                  height="11"
+                  width="9"
+                  height="9"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  viewBox="0 0 24 24"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                Agilens v0.2.0 · todo guardado · 100% local · sin servidores
+              </span>
+              <span>Sprint-14 · 7 días restantes · 26 pts</span>
+            </div>
+          </motion.div>
+
+          {/* Tab pill switcher */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.5 }}
+            style={{
+              display: 'flex',
+              gap: '10px',
+              justifyContent: 'center',
+              marginTop: '28px',
+              flexWrap: 'wrap',
+            }}
+          >
+            {(
+              [
+                { tab: 'editor' as DemoTab, label: 'Editor Markdown' },
+                { tab: 'kanban' as DemoTab, label: 'Tablero Kanban' },
+                { tab: 'sprints' as DemoTab, label: 'Gestión de Sprints' },
+                { tab: 'daily' as DemoTab, label: 'Daily Standup' },
+              ] as { tab: DemoTab; label: string }[]
+            ).map(({ tab, label }) => (
+              <button
+                key={tab}
+                onClick={() => setActiveDemo(tab)}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '20px',
+                  border: `1px solid ${
+                    activeDemo === tab ? preset.accentHex + '60' : 'var(--border-2)'
+                  }`,
+                  background: activeDemo === tab ? `${preset.accentHex}18` : 'transparent',
+                  color: activeDemo === tab ? preset.accentHex : 'var(--text-2)',
+                  fontSize: '13px',
+                  fontWeight: activeDemo === tab ? 700 : 400,
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-ui)',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      <div
+        style={{
+          display: 'none',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: '28px',
+        }}
+      >
+        {/* ── Demo 1: Editor Markdown ──────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 50, scale: 0.97 }}
+          whileInView={{ opacity: 1, y: 0, scale: 1 }}
+          viewport={{ once: true, margin: '-60px' }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            borderRadius: '14px',
+            border: '1px solid var(--border-2)',
+            overflow: 'hidden',
+            background: 'var(--bg-2)',
+          }}
+        >
+          {/* Tab bar */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 12px',
+              borderBottom: '1px solid var(--border-1)',
+              background: 'var(--bg-1)',
+            }}
+          >
+            <div style={{ display: 'flex', gap: '5px' }}>
+              {['#ff5f57', '#febc2e', '#28c840'].map(c => (
+                <div
+                  key={c}
+                  style={{ width: 10, height: 10, borderRadius: '50%', background: c }}
+                />
+              ))}
+            </div>
+            <span style={{ fontSize: '11px', color: 'var(--text-3)', fontFamily: 'monospace' }}>
+              editor-nota.md
+            </span>
+          </div>
+          {/* Split editor/preview */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', height: '220px' }}>
+            <textarea
+              value={mdValue}
+              onChange={e => setMdValue(e.target.value)}
+              spellCheck={false}
+              style={{
+                padding: '12px',
+                border: 'none',
+                borderRight: '1px solid var(--border-1)',
+                background: 'var(--bg-1)',
+                color: 'var(--text-0)',
+                fontFamily: 'var(--font-editor, monospace)',
+                fontSize: '12px',
+                resize: 'none',
+                outline: 'none',
+                lineHeight: 1.6,
+              }}
+            />
+            <div
+              style={{
+                padding: '12px',
+                fontSize: '12px',
+                lineHeight: 1.7,
+                overflow: 'auto',
+                color: 'var(--text-0)',
+              }}
+              dangerouslySetInnerHTML={{ __html: previewHtml }}
+            />
+          </div>
+          <div
+            style={{
+              padding: '8px 12px',
+              background: 'var(--bg-1)',
+              borderTop: '1px solid var(--border-1)',
+              fontSize: '10px',
+              color: 'var(--text-3)',
+              fontFamily: 'var(--font-ui)',
+            }}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <svg
+                width="11"
+                height="11"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                viewBox="0 0 24 24"
+              >
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              Editor Markdown interactivo — escribe algo arriba
+            </span>
+          </div>
+        </motion.div>
+
+        {/* ── Demo 2: Kanban ───────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 50, scale: 0.97 }}
+          whileInView={{ opacity: 1, y: 0, scale: 1 }}
+          viewport={{ once: true, margin: '-60px' }}
+          transition={{ duration: 0.55, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            borderRadius: '14px',
+            border: '1px solid var(--border-2)',
+            overflow: 'hidden',
+            background: 'var(--bg-2)',
+          }}
+        >
+          <div
+            style={{
+              padding: '10px 14px',
+              borderBottom: '1px solid var(--border-1)',
+              background: 'var(--bg-1)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <svg
+              width="13"
+              height="13"
+              fill="none"
+              stroke={preset.accentHex}
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              style={{ transition: 'stroke 0.4s' }}
+            >
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+            <span
+              style={{ fontSize: '11px', color: 'var(--text-3)', fontFamily: 'var(--font-ui)' }}
+            >
+              kanban · sprint-14
+            </span>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              gap: '8px',
+              padding: '12px',
+              overflowX: 'auto',
+              height: '220px',
+            }}
+          >
+            {MINI_KANBAN.map(col => (
+              <div
+                key={col.col}
+                style={{
+                  flex: '0 0 150px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    marginBottom: '2px',
+                  }}
+                >
+                  <div
+                    style={{ width: 7, height: 7, borderRadius: '50%', background: col.color }}
+                  />
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      color: 'var(--text-2)',
+                      fontFamily: 'var(--font-ui)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    {col.col}
+                  </span>
+                </div>
+                {col.tasks.map(t => (
+                  <div
+                    key={t}
+                    style={{
+                      padding: '7px 9px',
+                      borderRadius: '7px',
+                      background: 'var(--bg-1)',
+                      border: '1px solid var(--border-1)',
+                      fontSize: '11px',
+                      color: 'var(--text-1)',
+                      lineHeight: 1.4,
+                      cursor: 'default',
+                      userSelect: 'none',
+                    }}
+                  >
+                    {t}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div
+            style={{
+              padding: '8px 12px',
+              background: 'var(--bg-1)',
+              borderTop: '1px solid var(--border-1)',
+              fontSize: '10px',
+              color: 'var(--text-3)',
+            }}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <svg
+                width="11"
+                height="11"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                viewBox="0 0 24 24"
+              >
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+              </svg>
+              Kanban drag-and-drop · 5 columnas · prioridad visual
+            </span>
+          </div>
+        </motion.div>
+
+        {/* ── Demo 3: Sprint ───────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 50, scale: 0.97 }}
+          whileInView={{ opacity: 1, y: 0, scale: 1 }}
+          viewport={{ once: true, margin: '-60px' }}
+          transition={{ duration: 0.55, delay: 0.24, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            borderRadius: '14px',
+            border: '1px solid var(--border-2)',
+            overflow: 'hidden',
+            background: 'var(--bg-2)',
+          }}
+        >
+          <div
+            style={{
+              padding: '10px 14px',
+              borderBottom: '1px solid var(--border-1)',
+              background: 'var(--bg-1)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <svg
+              width="13"
+              height="13"
+              fill="none"
+              stroke={preset.accentHex}
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              style={{ transition: 'stroke 0.4s' }}
+            >
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>
+              sprints · Sprint-14 · activo
+            </span>
+          </div>
+          <div
+            style={{
+              padding: '16px',
+              height: '220px',
+              overflow: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+            }}
+          >
+            {/* Sprint card */}
+            <div
+              style={{
+                padding: '12px',
+                borderRadius: '10px',
+                background: 'var(--bg-1)',
+                border: `1px solid ${preset.accentHex}40`,
+                transition: 'border-color 0.4s',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  marginBottom: '10px',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 700 }}>Sprint 14 — Auth System</div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-3)', marginTop: '2px' }}>
+                    28 Feb → 14 Mar · 7 días restantes
+                  </div>
+                </div>
+                <span
+                  style={{
+                    fontSize: '10px',
+                    padding: '2px 7px',
+                    borderRadius: '20px',
+                    background: `${preset.accentHex}20`,
+                    color: preset.accentHex,
+                    fontWeight: 700,
+                    transition: 'all 0.4s',
+                  }}
+                >
+                  Activo
+                </span>
+              </div>
+              {/* Progress bar */}
+              <div style={{ marginBottom: '8px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '10px',
+                    color: 'var(--text-3)',
+                    marginBottom: '5px',
+                  }}
+                >
+                  <span>Progreso</span>
+                  <span>{sprintProgress}%</span>
+                </div>
+                <div
+                  style={{
+                    height: '6px',
+                    borderRadius: '3px',
+                    background: 'var(--bg-3)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <motion.div
+                    initial={{ width: 0 }}
+                    whileInView={{ width: `${sprintProgress}%` }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 1.2, delay: 0.4, ease: 'easeOut' }}
+                    style={{
+                      height: '100%',
+                      borderRadius: '3px',
+                      background: preset.accentHex,
+                      transition: 'background 0.4s',
+                    }}
+                  />
+                </div>
+              </div>
+              {/* Stats */}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {[
+                  { l: '8 pts', d: 'Completados' },
+                  { l: '4 pts', d: 'Restantes' },
+                  { l: '2', d: 'Bloqueos' },
+                ].map(s => (
+                  <div
+                    key={s.d}
+                    style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      padding: '6px',
+                      borderRadius: '6px',
+                      background: 'var(--bg-2)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: preset.accentHex,
+                        transition: 'color 0.4s',
+                      }}
+                    >
+                      {s.l}
+                    </div>
+                    <div style={{ fontSize: '9px', color: 'var(--text-3)', marginTop: '1px' }}>
+                      {s.d}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Mini daily entry */}
+            <div
+              style={{
+                padding: '10px 12px',
+                borderRadius: '8px',
+                background: 'var(--bg-1)',
+                border: '1px solid var(--border-1)',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '10px',
+                  color: 'var(--text-3)',
+                  marginBottom: '5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <svg
+                  width="10"
+                  height="10"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
@@ -1411,69 +2585,165 @@ export default function LandingPage({ onEnter, onClose }: Props) {
                   strokeLinejoin="round"
                   viewBox="0 0 24 24"
                 >
-                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
                 </svg>
-                Sprints con burndown · Tareas · Daily · Impedimentos
-              </span>
+                Daily · Hoy — 26 Feb
+              </div>
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--text-1)',
+                  lineHeight: 1.7,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '3px',
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
+                  <svg
+                    width="10"
+                    height="10"
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    viewBox="0 0 24 24"
+                    style={{ marginTop: '2px', flexShrink: 0 }}
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Terminé el endpoint de login
+                </span>
+                <span style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
+                  <svg
+                    width="10"
+                    height="10"
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    viewBox="0 0 24 24"
+                    style={{ marginTop: '2px', flexShrink: 0 }}
+                  >
+                    <polyline points="1 4 1 10 7 10" />
+                    <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
+                  </svg>
+                  Revisando middleware JWT
+                </span>
+                <span style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
+                  <svg
+                    width="10"
+                    height="10"
+                    fill="none"
+                    stroke="#ef4444"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    viewBox="0 0 24 24"
+                    style={{ marginTop: '2px', flexShrink: 0 }}
+                  >
+                    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                  Bloqueado por falta de certs SSL
+                </span>
+              </div>
             </div>
-          </motion.div>
-        </div>
-      </section>
+          </div>
+          <div
+            style={{
+              padding: '8px 12px',
+              background: 'var(--bg-1)',
+              borderTop: '1px solid var(--border-1)',
+              fontSize: '10px',
+              color: 'var(--text-3)',
+            }}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <svg
+                width="11"
+                height="11"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                viewBox="0 0 24 24"
+              >
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+              Sprints con burndown · Tareas · Daily · Impedimentos
+            </span>
+          </div>
+        </motion.div>
+      </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
           SECCIÓN 3 — FEATURES GRID
       ══════════════════════════════════════════════════════════════════════ */}
       <section
         style={{
-          padding: 'clamp(40px,8vh,80px) clamp(16px,4vw,60px)',
+          padding: 'clamp(60px,10vh,110px) clamp(16px,4vw,60px)',
           background: 'var(--bg-2)',
           borderTop: '1px solid var(--border-1)',
           borderBottom: '1px solid var(--border-1)',
         }}
       >
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '44px' }}>
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ duration: 0.55, ease: 'easeOut' }}
+            style={{ textAlign: 'center', marginBottom: '52px' }}
+          >
             <h2
               style={{
-                fontSize: 'clamp(20px,3vw,32px)',
+                fontSize: 'clamp(20px,3vw,34px)',
                 fontWeight: 800,
-                margin: '0 0 10px',
+                margin: '0 0 12px',
                 letterSpacing: '-0.02em',
               }}
             >
               Todo lo que un equipo ágil necesita
             </h2>
-            <p style={{ color: 'var(--text-2)', fontSize: '14px' }}>
+            <p style={{ color: 'var(--text-2)', fontSize: '14px', lineHeight: 1.6 }}>
               Sin plugins. Sin integraciones de pago. Sin límites artificiales.
             </p>
-          </div>
+          </motion.div>
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-              gap: '14px',
+              gap: '18px',
             }}
           >
             {FEATURES.map((f, i) => (
               <motion.div
                 key={f.title}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.35, delay: i * 0.04 }}
+                initial={{ opacity: 0, y: 24, scale: 0.95 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, margin: '-50px' }}
+                transition={{ duration: 0.4, delay: i * 0.05, ease: [0.22, 1, 0.36, 1] }}
                 style={{
-                  padding: '16px',
-                  borderRadius: '12px',
+                  padding: '20px 18px',
+                  borderRadius: '14px',
                   background: 'var(--bg-1)',
                   border: '1px solid var(--border-1)',
                   transition: 'border-color 0.2s',
                   cursor: 'default',
                 }}
-                whileHover={{ borderColor: preset.accentHex + '80', scale: 1.01 }}
+                whileHover={{ borderColor: preset.accentHex + '80', scale: 1.02, y: -2 }}
               >
                 <div
                   style={{
-                    marginBottom: '8px',
+                    marginBottom: '12px',
                     color: preset.accentHex,
                     transition: 'color 0.4s',
                     lineHeight: 0,
@@ -1481,10 +2751,10 @@ export default function LandingPage({ onEnter, onClose }: Props) {
                 >
                   {f.icon}
                 </div>
-                <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '5px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
                   {f.title}
                 </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.5 }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
                   {f.desc}
                 </div>
               </motion.div>
@@ -1496,12 +2766,18 @@ export default function LandingPage({ onEnter, onClose }: Props) {
       {/* ══════════════════════════════════════════════════════════════════════
           SECCIÓN 4 — PILARES
       ══════════════════════════════════════════════════════════════════════ */}
-      <section style={{ padding: 'clamp(40px,8vh,80px) clamp(16px,4vw,60px)' }}>
+      <section style={{ padding: 'clamp(60px,10vh,110px) clamp(16px,4vw,60px)' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '44px' }}>
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ duration: 0.55, ease: 'easeOut' }}
+            style={{ textAlign: 'center', marginBottom: '52px' }}
+          >
             <h2
               style={{
-                fontSize: 'clamp(20px,3vw,32px)',
+                fontSize: 'clamp(20px,3vw,34px)',
                 fontWeight: 800,
                 margin: '0 0 10px',
                 letterSpacing: '-0.02em',
@@ -1509,35 +2785,36 @@ export default function LandingPage({ onEnter, onClose }: Props) {
             >
               Construido sobre principios que importan
             </h2>
-          </div>
+          </motion.div>
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '20px',
+              gap: '28px',
             }}
           >
             {PILLARS.map((p, i) => (
               <motion.div
                 key={p.title}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: i * 0.08 }}
+                initial={{ opacity: 0, y: 40, x: i % 2 === 0 ? -20 : 20 }}
+                whileInView={{ opacity: 1, y: 0, x: 0 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 0.6, delay: i * 0.1, ease: [0.22, 1, 0.36, 1] }}
+                whileHover={{ y: -4, boxShadow: `0 8px 32px ${p.color}18` }}
                 style={{
-                  padding: '24px 20px',
-                  borderRadius: '14px',
+                  padding: '28px 24px',
+                  borderRadius: '16px',
                   background: 'var(--bg-2)',
                   border: '1px solid var(--border-1)',
                   borderTop: `3px solid ${p.color}`,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '12px',
+                  gap: '14px',
                 }}
               >
                 <div style={{ color: p.color }}>{p.icon}</div>
                 <div style={{ fontSize: '15px', fontWeight: 700 }}>{p.title}</div>
-                <div style={{ fontSize: '13px', color: 'var(--text-2)', lineHeight: 1.6 }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-2)', lineHeight: 1.7 }}>
                   {p.desc}
                 </div>
               </motion.div>
@@ -1551,45 +2828,52 @@ export default function LandingPage({ onEnter, onClose }: Props) {
       ══════════════════════════════════════════════════════════════════════ */}
       <section
         style={{
-          padding: 'clamp(40px,8vh,80px) clamp(16px,4vw,60px)',
+          padding: 'clamp(60px,10vh,110px) clamp(16px,4vw,60px)',
           background: 'var(--bg-2)',
           borderTop: '1px solid var(--border-1)',
           borderBottom: '1px solid var(--border-1)',
         }}
       >
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '44px' }}>
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ duration: 0.55, ease: 'easeOut' }}
+            style={{ textAlign: 'center', marginBottom: '52px' }}
+          >
             <h2
               style={{
-                fontSize: 'clamp(20px,3vw,32px)',
+                fontSize: 'clamp(20px,3vw,34px)',
                 fontWeight: 800,
-                margin: '0 0 10px',
+                margin: '0 0 12px',
                 letterSpacing: '-0.02em',
               }}
             >
               Diseñado para personas reales
             </h2>
-            <p style={{ color: 'var(--text-2)', fontSize: '14px' }}>
+            <p style={{ color: 'var(--text-2)', fontSize: '14px', lineHeight: 1.6 }}>
               Desde el dev solo hasta el equipo de producto más exigente.
             </p>
-          </div>
+          </motion.div>
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '16px',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+              gap: '24px',
             }}
           >
             {PERSONAS.map((p, i) => (
               <motion.div
                 key={p.role}
-                initial={{ opacity: 0, scale: 0.95 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: i * 0.07 }}
+                initial={{ opacity: 0, y: 36, scale: 0.93 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, margin: '-50px' }}
+                transition={{ duration: 0.55, delay: i * 0.1, ease: [0.22, 1, 0.36, 1] }}
+                whileHover={{ y: -4, borderColor: preset.accentHex + '60' }}
                 style={{
-                  padding: '20px',
-                  borderRadius: '14px',
+                  padding: '28px 20px',
+                  borderRadius: '16px',
                   background: 'var(--bg-1)',
                   border: '1px solid var(--border-1)',
                   textAlign: 'center',
@@ -1630,21 +2914,42 @@ export default function LandingPage({ onEnter, onClose }: Props) {
       {/* ══════════════════════════════════════════════════════════════════════
           SECCIÓN 6 — PWA + SELF HOSTED
       ══════════════════════════════════════════════════════════════════════ */}
-      <section style={{ padding: 'clamp(40px,8vh,80px) clamp(16px,4vw,60px)' }}>
+      <section style={{ padding: 'clamp(60px,10vh,110px) clamp(16px,4vw,60px)' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ duration: 0.55, ease: 'easeOut' }}
+            style={{ textAlign: 'center', marginBottom: '52px' }}
+          >
+            <h2
+              style={{
+                fontSize: 'clamp(20px,3vw,34px)',
+                fontWeight: 800,
+                margin: '0 0 12px',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              Tu app, donde sea que estés
+            </h2>
+            <p style={{ color: 'var(--text-2)', fontSize: '14px', lineHeight: 1.6 }}>
+              Instala, abre offline y sincroniza cuando quieras.
+            </p>
+          </motion.div>
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-              gap: '20px',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '28px',
             }}
           >
             {/* PWA */}
             <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
+              initial={{ opacity: 0, x: -40, scale: 0.97 }}
+              whileInView={{ opacity: 1, x: 0, scale: 1 }}
+              viewport={{ once: true, margin: '-60px' }}
+              transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
               style={{
                 padding: '28px 24px',
                 borderRadius: '16px',
@@ -1721,10 +3026,10 @@ export default function LandingPage({ onEnter, onClose }: Props) {
 
             {/* Self hosted */}
             <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.1 }}
+              initial={{ opacity: 0, x: 40, scale: 0.97 }}
+              whileInView={{ opacity: 1, x: 0, scale: 1 }}
+              viewport={{ once: true, margin: '-60px' }}
+              transition={{ duration: 0.65, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
               style={{
                 padding: '28px 24px',
                 borderRadius: '16px',
@@ -1782,7 +3087,7 @@ export default function LandingPage({ onEnter, onClose }: Props) {
       <section
         ref={ctaRef}
         style={{
-          padding: 'clamp(60px,10vh,120px) clamp(16px,4vw,60px)',
+          padding: 'clamp(80px,12vh,140px) clamp(16px,4vw,60px)',
           textAlign: 'center',
           background: `radial-gradient(ellipse at 50% 0%, ${preset.accentHex}20 0%, var(--bg-1) 70%)`,
           transition: 'background 0.6s',
@@ -1790,18 +3095,29 @@ export default function LandingPage({ onEnter, onClose }: Props) {
         }}
       >
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.3 }}
           style={{ maxWidth: '640px', margin: '0 auto' }}
         >
-          <AgilensLogo size={44} showWordmark variant="color" />
-          <h2
+          <motion.div
+            initial={{ opacity: 0, scale: 0.85 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <AgilensLogo size={52} showWordmark variant="color" />
+          </motion.div>
+          <motion.h2
+            initial={{ opacity: 0, y: 32 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
             style={{
-              fontSize: 'clamp(24px,4vw,44px)',
+              fontSize: 'clamp(26px,4.5vw,48px)',
               fontWeight: 900,
-              margin: '24px 0 14px',
+              margin: '28px 0 16px',
               lineHeight: 1.1,
               letterSpacing: '-0.03em',
             }}
@@ -1811,24 +3127,32 @@ export default function LandingPage({ onEnter, onClose }: Props) {
             <span style={{ color: preset.accentHex, transition: 'color 0.4s' }}>
               hoy mismo. Sin registro.
             </span>
-          </h2>
-          <p
+          </motion.h2>
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.2, ease: 'easeOut' }}
             style={{
               fontSize: '15px',
               color: 'var(--text-2)',
-              marginBottom: '36px',
-              lineHeight: 1.6,
+              marginBottom: '40px',
+              lineHeight: 1.7,
             }}
           >
             Sin cuenta. Sin tarjeta. Sin límites. Solo abre el navegador y empieza.
-          </p>
-          <div
+          </motion.p>
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.32, ease: [0.22, 1, 0.36, 1] }}
             style={{
               display: 'flex',
               gap: '12px',
               justifyContent: 'center',
               flexWrap: 'wrap',
-              marginBottom: '28px',
+              marginBottom: '32px',
             }}
           >
             <button
@@ -1847,8 +3171,14 @@ export default function LandingPage({ onEnter, onClose }: Props) {
             >
               Abrir Agilens →
             </button>
-          </div>
-          <p style={{ fontSize: '12px', color: 'var(--text-3)' }}>
+          </motion.div>
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.45 }}
+            style={{ fontSize: '12px', color: 'var(--text-3)' }}
+          >
             Open Source · MIT License ·{' '}
             <a
               href="https://github.com/sazardev/agilens"
@@ -1858,7 +3188,7 @@ export default function LandingPage({ onEnter, onClose }: Props) {
             >
               github.com/sazardev/agilens
             </a>
-          </p>
+          </motion.p>
         </motion.div>
       </section>
 
