@@ -13,7 +13,6 @@ import {
   toggleNotePin,
   toggleNoteLocked,
   setNoteColor,
-  setNoteProject,
   setNoteProjects,
 } from '@/store/slices/notesSlice'
 import type { Note, NoteAttachment, NoteType } from '@/types'

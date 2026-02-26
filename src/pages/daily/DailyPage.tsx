@@ -929,64 +929,6 @@ function AddInput({
   )
 }
 
-// ─── Note checkbox row ────────────────────────────────────────────────────────
-
-function NoteCheckRow({
-  note,
-  checked,
-  onChange,
-}: {
-  note: Note
-  checked: boolean
-  onChange: () => void
-}) {
-  return (
-    <label
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '9px',
-        padding: '6px 10px',
-        borderRadius: 'var(--radius-md)',
-        background: checked ? 'var(--accent-glow)' : 'transparent',
-        border: `1px solid ${checked ? 'var(--accent-600)' : 'var(--border-1)'}`,
-
-        cursor: 'pointer',
-        transition: 'all 0.15s',
-      }}
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={onChange}
-        style={{ accentColor: 'var(--accent-500)', flexShrink: 0 }}
-      />
-      <span
-        style={{
-          fontSize: '12px',
-          color: 'var(--text-0)',
-          flex: 1,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {note.title}
-      </span>
-      <span
-        style={{
-          fontSize: '10px',
-          color: 'var(--text-3)',
-          fontFamily: 'var(--font-mono)',
-          flexShrink: 0,
-        }}
-      >
-        {note.noteType}
-      </span>
-    </label>
-  )
-}
-
 // ─── Main DailyPage ────────────────────────────────────────────────────────────
 
 export default function DailyPage() {
@@ -1085,19 +1027,6 @@ export default function DailyPage() {
     ? entry.projectIds
     : (prevEntryWithProjects?.projectIds ?? [])
 
-  // sprintNotes: broad set para auto-link (tasks, sprint notes y tags relacionados)
-  const sprintNotes: Note[] = activeSprint
-    ? notes.filter(
-        n =>
-          n.noteType === 'task' ||
-          n.noteType === 'sprint' ||
-          n.tags.some(
-            t =>
-              activeSprint.name.toLowerCase().includes(t.toLowerCase()) ||
-              t.toLowerCase().includes(activeSprint.name.split(' ')[0]?.toLowerCase() ?? '')
-          )
-      )
-    : []
   // Sugerencias: SOLO tareas directamente asignadas al sprint activo
   const suggestions = activeSprint
     ? notes
@@ -1240,9 +1169,6 @@ export default function DailyPage() {
     flashSave()
     setTimeout(() => navigate('/editor'), 120)
   }, [entry, notes, activeSprint, sprints, dispatch, navigate])
-
-  // Notas vinculables (usado en el modal)
-  const linkableNotes = notes.filter(n => LINKABLE_NOTE_TYPES.includes(n.noteType))
 
   // Preview en tiempo real del markdown que se generará
   const previewMarkdown = buildMarkdown(

@@ -81,22 +81,6 @@ const IcoLink = () => (
   </svg>
 )
 
-const IcoChevron = ({ open }: { open: boolean }) => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={{ transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : 'none' }}
-  >
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-)
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Props {

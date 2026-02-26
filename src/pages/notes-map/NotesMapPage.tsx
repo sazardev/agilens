@@ -56,6 +56,7 @@ interface GEdge {
     | 'project-note'
     | 'project-sprint'
     | 'wikilink'
+    | 'research-task'
   color: string
   width: number
   dashed: boolean

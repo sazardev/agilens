@@ -19,7 +19,7 @@ import {
   linkRepo,
   unlinkRepo,
 } from '@/store/slices/projectsSlice'
-import { setNoteProject, setNoteProjects } from '@/store/slices/notesSlice'
+import { setNoteProjects } from '@/store/slices/notesSlice'
 import type { Project, ProjectIconName, NoteType } from '@/types'
 import { NOTE_TYPE_META } from '@/types'
 import { PROJECT_ICON_COMPONENTS, PROJECT_ICON_LABELS, ProjectIcon } from '@/lib/projectIcons'

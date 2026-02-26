@@ -286,6 +286,7 @@ const NOTE_ICONS: Record<NoteType, JSX.Element> = {
   meeting: <IcoMeeting />,
   sprint: <IcoSprint />,
   task: <IcoTask />,
+  research: <IcoTask />,
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
